@@ -3,6 +3,13 @@
 2. Install Zephyr (todo check if this is done by PlatformIO IDE automatically): https://docs.zephyrproject.org/latest/getting_started/installation_linux.html#installation-linux 
 
 # Resources
+
+## PlatformIO 
+- PlatformIO+Zephyr: https://docs.platformio.org/en/latest/frameworks/zephyr.html#tutorials
+## Zephyr
+- Intro video: https://www.youtube.com/watch?v=jR5E5Kz9A-k&t=3s&ab_channel=NordicSemiconductor
+- Samples: https://docs.zephyrproject.org/latest/samples/index.html
+- Application development: https://docs.zephyrproject.org/latest/application/index.html
 ## Bluetooth
 ### Mesh
 - Specs: https://www.bluetooth.com/specifications/mesh-specifications/?utm_campaign=mesh&amp;utm_source=internal&amp;utm_medium=blog&amp;utm_content=bluetooth-mesh-developer-study-guide-v2.0
