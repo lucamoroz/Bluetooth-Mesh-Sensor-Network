@@ -189,13 +189,15 @@ uint8_t current_hsl_inx = 1;
 // -------------------------------------------------------------------------------------------------------
 // Composition
 // -----------
-// define publication context
-BT_MESH_MODEL_PUB_DEFINE(gen_onoff_cli, NULL, 2);
+// define publication contexts (allocating messages ie net buffers)
+BT_MESH_MODEL_PUB_DEFINE(gen_onoff_cli, NULL, 2); // 2 = 1+1 = sizeof(on_of_off) + sizeof(tid)
+BT_MESH_MODEL_PUB_DEFINE(light_hsl_cli, NULL, 7); // 7 = 2+2+2+1 = sizeof(hue)+sizeof(sat)+sizeof(light)+sizeof(tid) - see mesh model spec section 6.3.3.2
 
 static struct bt_mesh_model sig_models[] = {
 	BT_MESH_MODEL_CFG_SRV(&cfg_srv),
 	BT_MESH_MODEL_HEALTH_SRV(&health_srv, &health_pub),
 	BT_MESH_MODEL(BT_MESH_MODEL_ID_GEN_ONOFF_CLI, gen_onoff_cli_op, &gen_onoff_cli, &onoff[0]),
+	BT_MESH_MODEL(BT_MESH_MODEL_ID_LIGHT_HSL_CLI, NULL, &light_hsl_cli, &hsl[0]),
 };
 
 
@@ -275,6 +277,45 @@ void generic_onoff_set_unack(uint8_t on_or_off) {
 // Light HSL Client - TX message producer functions
 // -----------------------------------------------------------
 
+int send_light_hsl_set(uint16_t msg_type) {
+	int err;
+	struct bt_mesh_model *model = &sig_models[3];
+	if (model->pub->addr == BT_MESH_ADDR_UNASSIGNED) {
+		printk("No publishing address associated with the light HSL client model - add one with a config app like nrf mesh\n");
+		return -1;
+	}
+
+	struct net_buf_simple *msg = model->pub->msg;
+	bt_mesh_model_msg_init(msg, msg_type);
+	// ordering is lightness, hue, and saturation - see section 6.3.3.2 mesh profile specification
+	net_buf_simple_add_le16(msg, hsl[current_hsl_inx][2]);
+	net_buf_simple_add_le16(msg, hsl[current_hsl_inx][0]);
+	net_buf_simple_add_le16(msg, hsl[current_hsl_inx][1]);
+	net_buf_simple_add_u8(msg, hsl_tid);
+	
+	hsl_tid++;
+	
+	printk("publishing light HSL set message\n");
+	err = bt_mesh_model_publish(model);
+	if (err) {
+		printk("bt_mesh_model_publish err: %d\n", err);
+	} else {
+		current_hsl_inx++;
+		if (current_hsl_inx == NUMBER_OF_COLOURS) {
+			current_hsl_inx = 0;
+		}
+	}
+	
+	return err;
+}
+
+void light_hsl_set_unack() {
+	if (send_light_hsl_set(BT_MESH_MODEL_OP_LIGHT_HSL_SET_UNACK)) {
+		printk("Unable to send light hsl set unack message\n");
+	}
+}
+
+
 bool debounce() {
 	bool ignore = false;
 	btn_time = k_uptime_get_32();
@@ -287,30 +328,28 @@ bool debounce() {
 	return ignore;
 }
 
-void button_pressed(const struct device *dev, struct gpio_callback *cb,
-		    uint32_t pins)
-{	
+void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins) {	
 	if (!debounce()) {
 		printk("Button pressed at %" PRIu32 "\n", k_cycle_get_32());
 		
-		if (op_id % 3 == 0) {
+		if (op_id % 4 == 0) {
 			generic_onoff_set_unack(0);
-		} else if (op_id % 3 == 1) {
+		} else if (op_id % 4 == 1) {
 			generic_onoff_set_unack(1);
-		} else if (op_id % 3 == 2) {
+		} else if (op_id % 4 == 2) {
 			generic_onoff_get();
+		} else if (op_id % 4 == 3) {
+			light_hsl_set_unack();
 		}
 		op_id++;
 	}
-	
 }
 
 // -------------------------------------------------------------------------------------------------------
 // LED
 // -------
 
-void initializeLED(void)
-{
+void initialize_led(void) {
 	printk("initializeLED\n");
 	int ret;
 
@@ -412,7 +451,7 @@ void main(void)
 
 	configureButtons();
 
-	initializeLED();
+	initialize_led();
 	
 	err = bt_enable(bt_ready);
 	if (err)
