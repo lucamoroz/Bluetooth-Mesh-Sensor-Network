@@ -1,3 +1,8 @@
+# Description
+TUWien - IoT project.
+
+Group: Luca Moroldo, Luca Tasso
+
 # Requirements
 Our plan is to build a system capable of monitoring temperature and air quality of one or more rooms and show this dashboard.
 Moreover the sensors will notify any critical air condition through their LED.
