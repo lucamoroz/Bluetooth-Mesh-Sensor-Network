@@ -1,0 +1,3 @@
+sample:
+  description: Interface with sensors CCS811, HTS221, and
+  name: Sensor interface
