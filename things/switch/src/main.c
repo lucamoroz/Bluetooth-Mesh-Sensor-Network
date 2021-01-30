@@ -42,26 +42,25 @@ int op_id = 0;
 static const uint8_t dev_uuid[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x00 };
 
 static uint8_t onoff_tid;
-static uint8_t hsl_tid;
 
-void ledOn(void) {
+void led_on(void) {
 	printk("turning led on\n");
 	gpio_pin_set(led, LED0_GPIO_PIN, 1);
 }
 
-void ledOff(void) {
+void led_off(void) {
 	printk("turning led off\n");
 	gpio_pin_set(led, LED0_GPIO_PIN, 0);
 }
 
 static void attention_on(struct bt_mesh_model *model) {
 	printk("attention_on\n");
-	ledOn();
+	led_on();
 }
 
 static void attention_off(struct bt_mesh_model *model) {
 	printk("attention_off\n");
-	ledOff();
+	led_off();
 }
 
 static const struct bt_mesh_health_srv_cb health_srv_cb = {
@@ -146,47 +145,6 @@ static const struct bt_mesh_model_op gen_onoff_cli_op[] = {
 };
 
 // -------------------------------------------------------------------------------------------------------
-// Light HSL Client Model
-// ----------------------
-
-/*
-BLACK   : HSL(    0,    0,    0) = RGB(0,0,0)
-
-RED     : HSL(    0,65535,32767) = RGB(255,0,0)
-
-GREEN   : HSL(21845,65535,32767) = RGB(0,255,0)
-
-BLUE    : HSL(43690,65535,32767) = RGB(0,0,255)
-
-YELLOW  : HSL(10922,65535,32767) = RGB(255,255,0)
-
-MAGENTA : HSL(54613,65535,32767) = RGB(255,0,255)
-
-CYAN    : HSL(32768,65535,32767) = RGB(0,255,255)
-
-WHITE   : HSL(    0,    0,65535) = RGB(255,255,255)
-*/
-
-#define NUMBER_OF_COLOURS 8
-
-uint16_t hsl[NUMBER_OF_COLOURS][3] = {
-	{ 0x0000, 0x0000, 0x0000 }, // black
-	{ 0x0000, 0xFFFF, 0x7FFF }, // red 
-	{ 0x5555, 0xFFFF, 0x7FFF }, // green
-	{ 0xAAAA, 0xFFFF, 0x7FFF }, // blue
-	{ 0x2AAA, 0xFFFF, 0x7FFF }, // yellow
-	{ 0xD555, 0xFFFF, 0x7FFF }, // magenta
-	{ 0x7FFF, 0xFFFF, 0x7FFF }, // cyan
-	{ 0x0000, 0x0000, 0xFFFF }  // white
-};
-
-uint8_t current_hsl_inx = 1;
-
-// message types defined by this model.
-#define BT_MESH_MODEL_OP_LIGHT_HSL_SET_UNACK	BT_MESH_MODEL_OP_2(0x82, 0x77)
-
-
-// -------------------------------------------------------------------------------------------------------
 // Sensor client model
 // --------------------
 
@@ -218,14 +176,12 @@ static const struct bt_mesh_model_op sens_temp_cli_op[] = {
 // -----------
 // define publication contexts (allocating messages ie net buffers)
 BT_MESH_MODEL_PUB_DEFINE(gen_onoff_cli, NULL, 2); // 2 = 1+1 = sizeof(on_of_off) + sizeof(tid)
-BT_MESH_MODEL_PUB_DEFINE(light_hsl_cli, NULL, 7); // 7 = 2+2+2+1 = sizeof(hue)+sizeof(sat)+sizeof(light)+sizeof(tid) - see mesh model spec section 6.3.3.2
 BT_MESH_MODEL_PUB_DEFINE(sens_temp_cli, NULL, 2); // 2 = sizeof(propertyID) 
 
 static struct bt_mesh_model sig_models[] = {
 	BT_MESH_MODEL_CFG_SRV(&cfg_srv),
 	BT_MESH_MODEL_HEALTH_SRV(&health_srv, &health_pub),
 	BT_MESH_MODEL(BT_MESH_MODEL_ID_GEN_ONOFF_CLI, gen_onoff_cli_op, &gen_onoff_cli, &onoff[0]),
-	BT_MESH_MODEL(BT_MESH_MODEL_ID_LIGHT_HSL_CLI, NULL, &light_hsl_cli, &hsl[0]),
 	BT_MESH_MODEL(BT_MESH_MODEL_ID_SENSOR_CLI, sens_temp_cli_op, &sens_temp_cli, NULL),
 };
 
@@ -303,51 +259,10 @@ void generic_onoff_set_unack(uint8_t on_or_off) {
 	}
 }
 
-// Light HSL Client - TX message producer functions
-// -----------------------------------------------------------
-
-int send_light_hsl_set(uint16_t msg_type) {
-	int err;
-	struct bt_mesh_model *model = &sig_models[3];
-	if (model->pub->addr == BT_MESH_ADDR_UNASSIGNED) {
-		printk("No publishing address associated with the light HSL client model - add one with a config app like nrf mesh\n");
-		return -1;
-	}
-
-	struct net_buf_simple *msg = model->pub->msg;
-	bt_mesh_model_msg_init(msg, msg_type);
-	// ordering is lightness, hue, and saturation - see section 6.3.3.2 mesh profile specification
-	net_buf_simple_add_le16(msg, hsl[current_hsl_inx][2]);
-	net_buf_simple_add_le16(msg, hsl[current_hsl_inx][0]);
-	net_buf_simple_add_le16(msg, hsl[current_hsl_inx][1]);
-	net_buf_simple_add_u8(msg, hsl_tid);
-	
-	hsl_tid++;
-	
-	printk("publishing light HSL set message\n");
-	err = bt_mesh_model_publish(model);
-	if (err) {
-		printk("bt_mesh_model_publish err: %d\n", err);
-	} else {
-		current_hsl_inx++;
-		if (current_hsl_inx == NUMBER_OF_COLOURS) {
-			current_hsl_inx = 0;
-		}
-	}
-	
-	return err;
-}
-
-void light_hsl_set_unack() {
-	if (send_light_hsl_set(BT_MESH_MODEL_OP_LIGHT_HSL_SET_UNACK)) {
-		printk("Unable to send light hsl set unack message\n");
-	}
-}
-
 // Sensor Client - TX message producer functions
 // -----------------------------------------------------------
 int sensor_get() {
-	struct bt_mesh_model *model = &sig_models[4];
+	struct bt_mesh_model *model = &sig_models[3];
 	struct net_buf_simple *msg = model->pub->msg;
 	int err;
 
@@ -386,13 +301,11 @@ void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t
 		
 		if (op_id % 5 == 0) {
 			generic_onoff_set_unack(0);
-		} else if (op_id % 5 == 1) {
+		} else if (op_id % 4 == 1) {
 			generic_onoff_set_unack(1);
-		} else if (op_id % 5 == 2) {
+		} else if (op_id % 4 == 2) {
 			generic_onoff_get();
-		} else if (op_id % 5 == 3) {
-			light_hsl_set_unack();
-		} else if (op_id % 5 == 4) {
+		} else if (op_id % 4 == 3) {
 			sensor_get();
 		}
 		
@@ -423,7 +336,7 @@ void initialize_led(void) {
 	}
 
 	printk("Set up LED at %s pin %d\n", LED0_GPIO_LABEL, LED0_GPIO_PIN);
-	ledOff();
+	led_off();
 }
 
 // -------------------------------------------------------------------------------------------------------
@@ -502,7 +415,6 @@ void main(void)
 	printk("switch\n");
 
 	onoff_tid = 0;
-	hsl_tid = 0;
 
 	configure_buttons();
 

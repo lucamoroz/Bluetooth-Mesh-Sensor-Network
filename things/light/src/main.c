@@ -1,12 +1,3 @@
-/**
- * This will worked upon to create a partial implementation of the generic on off server and light HSL server models.
- * It will not be 100% complete and therefore not compliant with the applicable specifications.
- * Provided for education purposes only.
- * 
- * Coded for and tested with Nordic Thingy
- * 
- **/
-
 #include <stdlib.h>
 #include <bluetooth/bluetooth.h>
 #include <settings/settings.h>
@@ -24,9 +15,6 @@ struct device *led_ctrlr;
 // states and state changes
 uint8_t onoff_state;
 
-uint16_t hsl_lightness;
-uint16_t hsl_hue;
-uint16_t hsl_saturation;
 uint16_t rgb_r;
 uint16_t rgb_g;
 uint16_t rgb_b;
@@ -104,64 +92,6 @@ static const struct bt_mesh_prov prov = {
 	.reset = provisioning_reset,
 };
 
-/*
- * The following two functions were converted from the pseudocode provided in the mesh models specification, section 6.1.1 Introduction
- */
-
-double Hue_2_RGB(double v1, double v2, double vH ) {
-
-	// printf("Hue_2_RGB: v1=%f v2=%f vH=%f\n",v1,v2,vH);
-
-    if ( vH < 0.0f ) {
-		vH += 1.0f;
-	}
-    if ( vH > 1.0f ) {
-		vH -= 1.0f;
-	}
-    if (( 6.0f * vH ) < 1.0f ) {
-		return ( v1 + ( v2 - v1 ) * 6.0f * vH );
-	}
-    if (( 2.0f * vH ) < 1.0f ) {
-		return ( v2 );
-	}
-    if (( 3.0f * vH ) < 2.0f ) {
-		return ( v1 + ( v2 - v1 ) * ( ( 2.0f / 3.0f ) - vH ) * 6.0f );
-	}
-    return ( v1 );
-}	
-
-void convert_hsl_to_rgb(unsigned short hsl_h,unsigned short hsl_s,unsigned short hsl_l ) {
-	// printf("hsl_h=%d hsl_s=%d hsl_l=%d\n",hsl_h,hsl_s,hsl_l);
-    double H = hsl_h / 65535.0f;
-    double S = hsl_s / 65535.0f;
-    double L = hsl_l / 65535.0f;
-	double var_1 = 0.0f;
-	double var_2 = 0.0f;
-	
-    if ( S == 0 ) {
-      rgb_r = L * 255;
-      rgb_g = L * 255;
-      rgb_b = L * 255;
-    } else {
-      if ( L < 0.5f ) {
-	      var_2 = L * ( 1.0f + S );
-	  } else { 
-		  var_2 = ( L + S ) - ( S * L );
-	  }
-      var_1 = 2.0f * L - var_2;
-	  
-      double R = Hue_2_RGB( var_1, var_2, H + ( 1.0f / 3.0f ));
-      double G = Hue_2_RGB( var_1, var_2, H );
-      double B = Hue_2_RGB( var_1, var_2, H - ( 1.0f / 3.0f ));
-	  
-	  // printf("R=%f G=%f B=%f\n",R,G,B);
-	  
-	  rgb_r = 256 * R;
-	  rgb_g = 256 * G;
-	  rgb_b = 256 * B;
-    }
-}
-
 // generic onoff server message opcodes
 #define BT_MESH_MODEL_OP_GENERIC_ONOFF_GET BT_MESH_MODEL_OP_2(0x82, 0x01)
 #define BT_MESH_MODEL_OP_GENERIC_ONOFF_SET BT_MESH_MODEL_OP_2(0x82, 0x02)
@@ -232,52 +162,6 @@ static const struct bt_mesh_model_op generic_onoff_op[] = {
 // generic onoff server model publication context
 BT_MESH_MODEL_PUB_DEFINE(gen_onoff_pub, NULL, 2+1);
 
-// Light HSL Server Model - minimal subset only - would not be deemed compliant
-// -------------------------------------------------------------------------------------------------------
-
-// light HSL server message opcodes
-#define BT_MESH_MODEL_OP_LIGHT_HSL_SET_UNACK BT_MESH_MODEL_OP_2(0x82, 0x77)
-
-// light HSL server functions
-static void set_hsl_state(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
-	uint16_t msg_hsl_lightness = net_buf_simple_pull_le16(buf);
-	uint16_t msg_hsl_hue = net_buf_simple_pull_le16(buf);
-	uint16_t msg_hsl_saturation = net_buf_simple_pull_le16(buf);
-
-	if (msg_hsl_lightness == hsl_lightness && msg_hsl_hue == hsl_hue && msg_hsl_saturation == hsl_saturation) {
-		printk("ignoring set_hsl_state request: state already set\n");
-		return;
-	}
-
-	hsl_lightness = msg_hsl_lightness;
-	hsl_hue = msg_hsl_hue;
-	hsl_saturation = msg_hsl_saturation;
-
-	printk("set hsl state: lightness=%u hue=%u saturation=%u\n", hsl_lightness, hsl_hue, hsl_saturation);
-	if (onoff_state == 1) {
-		thingy_led_on(rgb_r, rgb_g, rgb_b);
-	}
-
-	// If a server has a publish address, it's required to publish its status after any state change 
-	// see mesh profile spec section 3.7.6.1.2
-
-	if (model->pub->addr != BT_MESH_ADDR_UNASSIGNED) {
-		printk("todo: send HSL status message\n");
-	}	
-}
-
-static void light_hsl_set_unack(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
-	printk("light_hsl_set_unack\n");
-	set_hsl_state(model, ctx, buf);
-}
-
-static const struct bt_mesh_model_op light_hsl_op[] = {
-	{BT_MESH_MODEL_OP_LIGHT_HSL_SET_UNACK, 7, light_hsl_set_unack},
-	BT_MESH_MODEL_OP_END,
-};
-
-// light HSL server model publication context
-BT_MESH_MODEL_PUB_DEFINE(light_hsl_pub, NULL, 2+6);
 
 // -------------------------------------------------------------------------------------------------------
 // Sensor server model
@@ -344,7 +228,6 @@ static struct bt_mesh_model sig_models[] = {
 		BT_MESH_MODEL_CFG_SRV(&cfg_srv),
 		BT_MESH_MODEL_HEALTH_SRV(&health_srv, &health_pub),
         BT_MESH_MODEL(BT_MESH_MODEL_ID_GEN_ONOFF_SRV, generic_onoff_op, &gen_onoff_pub, NULL),
-		BT_MESH_MODEL(BT_MESH_MODEL_ID_LIGHT_HSL_SRV, light_hsl_op, &light_hsl_pub, NULL),
 		BT_MESH_MODEL(BT_MESH_MODEL_ID_SENSOR_SRV, sens_temp_srv_op, &sens_pup, NULL),
 };
 
