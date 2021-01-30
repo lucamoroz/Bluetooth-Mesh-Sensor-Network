@@ -280,6 +280,41 @@ static const struct bt_mesh_model_op light_hsl_op[] = {
 BT_MESH_MODEL_PUB_DEFINE(light_hsl_pub, NULL, 2+6);
 
 // -------------------------------------------------------------------------------------------------------
+// Sensor server model
+// -----------
+
+#define BT_MESH_MODEL_OP_SENSOR_STATUS	BT_MESH_MODEL_OP_1(0x52)
+#define BT_MESH_MODEL_OP_SENSOR_GET	BT_MESH_MODEL_OP_2(0x82, 0x31)
+
+#define ID_TEMP_CELSIUS 0x2A1F
+
+BT_MESH_MODEL_PUB_DEFINE(sens_pup, NULL, 2+2);
+
+static void sensor_temp_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
+	struct net_buf_simple *msg = model->pub->msg;
+	int ret;
+
+	printk("sensor_temp_status\n");
+
+	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_SENSOR_STATUS);
+	net_buf_simple_add_le16(msg, ID_TEMP_CELSIUS);
+	net_buf_simple_add_le16(msg, 23); // TODO use real measurement
+
+	ret = bt_mesh_model_publish(model);
+	if (ret) {
+		printk("Error publishing sensor status: %d\n", ret);
+		return;
+	}
+	printk("Sensor status published\n");
+}
+
+static const struct bt_mesh_model_op sens_temp_srv_op[] = {
+	{ BT_MESH_MODEL_OP_SENSOR_GET, 2, sensor_temp_status },
+	BT_MESH_MODEL_OP_END,
+};
+
+
+// -------------------------------------------------------------------------------------------------------
 // Configuration Server
 // --------------------
 static struct bt_mesh_cfg_srv cfg_srv = {
@@ -310,6 +345,7 @@ static struct bt_mesh_model sig_models[] = {
 		BT_MESH_MODEL_HEALTH_SRV(&health_srv, &health_pub),
         BT_MESH_MODEL(BT_MESH_MODEL_ID_GEN_ONOFF_SRV, generic_onoff_op, &gen_onoff_pub, NULL),
 		BT_MESH_MODEL(BT_MESH_MODEL_ID_LIGHT_HSL_SRV, light_hsl_op, &light_hsl_pub, NULL),
+		BT_MESH_MODEL(BT_MESH_MODEL_ID_SENSOR_SRV, sens_temp_srv_op, &sens_pup, NULL),
 };
 
 // node contains elements.note that BT_MESH_MODEL_NONE means "none of this type" ands here means "no vendor models"
@@ -364,8 +400,7 @@ void generic_onoff_status(bool publish, uint8_t on_or_off) {
 	}
 }
 
-static void bt_ready(int err)
-{
+static void bt_ready(int err) {
 	if (err)
 	{
 		printk("bt_enable init failed with err %d\n", err);
@@ -399,8 +434,7 @@ static void bt_ready(int err)
 
 }
 
-static void configure_thingy_led_controller()
-{
+static void configure_thingy_led_controller() {
 	led_ctrlr = device_get_binding(PORT);
 	gpio_pin_configure(led_ctrlr, LED_R, GPIO_OUTPUT);
 	gpio_pin_configure(led_ctrlr, LED_G, GPIO_OUTPUT);
@@ -415,8 +449,7 @@ void indicate_on() {
 	thingy_led_on(r, g, b);	
 }
 
-void main(void)
-{
+void main(void) {
 	printk("thingy light node\n");
 
 	configure_thingy_led_controller();
@@ -433,6 +466,4 @@ void main(void)
 	{
 		printk("bt_enable failed with err %d\n", err);
 	}
-
-
 }

@@ -126,8 +126,7 @@ static struct bt_mesh_health_srv health_srv = {
 uint8_t onoff[] = {0,1};
 
 // generic on off client - handler functions for this model's RX messages
-static void generic_onoff_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) 
-{
+static void generic_onoff_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
 	// buf contains the message payload (opcode excluded)
 	printk("generic_onoff_status\n");
 	uint8_t onoff_state = net_buf_simple_pull_u8(buf);
@@ -186,18 +185,48 @@ uint8_t current_hsl_inx = 1;
 // message types defined by this model.
 #define BT_MESH_MODEL_OP_LIGHT_HSL_SET_UNACK	BT_MESH_MODEL_OP_2(0x82, 0x77)
 
+
+// -------------------------------------------------------------------------------------------------------
+// Sensor client model
+// --------------------
+
+#define BT_MESH_MODEL_OP_SENSOR_STATUS	BT_MESH_MODEL_OP_1(0x52)
+#define BT_MESH_MODEL_OP_SENSOR_GET	BT_MESH_MODEL_OP_2(0x82, 0x31)
+
+#define ID_TEMP_CELSIUS 0x2A1F
+
+static void sens_temp_get(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
+	printk("sens_temp_get\n");
+}
+
+static void sens_temp_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
+	printk("sens_temp_status\n");
+	printk("Sensor ID: 0x%04x\n", net_buf_simple_pull_le16(buf));
+	printk("Sensor value: 0x%04x\n\n", net_buf_simple_pull_le16(buf));
+}
+
+static const struct bt_mesh_model_op sens_temp_cli_op[] = {
+	{ BT_MESH_MODEL_OP_SENSOR_GET, 2, sens_temp_get },
+	{ BT_MESH_MODEL_OP_SENSOR_STATUS, 2, sens_temp_status },
+	BT_MESH_MODEL_OP_END,
+};
+
+
+
 // -------------------------------------------------------------------------------------------------------
 // Composition
 // -----------
 // define publication contexts (allocating messages ie net buffers)
 BT_MESH_MODEL_PUB_DEFINE(gen_onoff_cli, NULL, 2); // 2 = 1+1 = sizeof(on_of_off) + sizeof(tid)
 BT_MESH_MODEL_PUB_DEFINE(light_hsl_cli, NULL, 7); // 7 = 2+2+2+1 = sizeof(hue)+sizeof(sat)+sizeof(light)+sizeof(tid) - see mesh model spec section 6.3.3.2
+BT_MESH_MODEL_PUB_DEFINE(sens_temp_cli, NULL, 2); // 2 = sizeof(propertyID) 
 
 static struct bt_mesh_model sig_models[] = {
 	BT_MESH_MODEL_CFG_SRV(&cfg_srv),
 	BT_MESH_MODEL_HEALTH_SRV(&health_srv, &health_pub),
 	BT_MESH_MODEL(BT_MESH_MODEL_ID_GEN_ONOFF_CLI, gen_onoff_cli_op, &gen_onoff_cli, &onoff[0]),
 	BT_MESH_MODEL(BT_MESH_MODEL_ID_LIGHT_HSL_CLI, NULL, &light_hsl_cli, &hsl[0]),
+	BT_MESH_MODEL(BT_MESH_MODEL_ID_SENSOR_CLI, sens_temp_cli_op, &sens_temp_cli, NULL),
 };
 
 
@@ -315,6 +344,29 @@ void light_hsl_set_unack() {
 	}
 }
 
+// Sensor Client - TX message producer functions
+// -----------------------------------------------------------
+int sensor_get() {
+	struct bt_mesh_model *model = &sig_models[4];
+	struct net_buf_simple *msg = model->pub->msg;
+	int err;
+
+	if (model->pub->addr == BT_MESH_ADDR_UNASSIGNED) {
+		printk("No publishing address associated with the sensor client model - add one with a config app like nrf mesh\n");
+		return -1;
+	}
+
+	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_SENSOR_GET);
+	net_buf_simple_add_le16(msg, ID_TEMP_CELSIUS);
+
+	printk("publishing sensor set message\n");
+	err = bt_mesh_model_publish(model);
+	if (err) {
+		printk("bt_mesh_model_publish err: %d\n", err);
+	}
+	
+	return err;
+}
 
 bool debounce() {
 	bool ignore = false;
@@ -332,15 +384,18 @@ void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t
 	if (!debounce()) {
 		printk("Button pressed at %" PRIu32 "\n", k_cycle_get_32());
 		
-		if (op_id % 4 == 0) {
+		if (op_id % 5 == 0) {
 			generic_onoff_set_unack(0);
-		} else if (op_id % 4 == 1) {
+		} else if (op_id % 5 == 1) {
 			generic_onoff_set_unack(1);
-		} else if (op_id % 4 == 2) {
+		} else if (op_id % 5 == 2) {
 			generic_onoff_get();
-		} else if (op_id % 4 == 3) {
+		} else if (op_id % 5 == 3) {
 			light_hsl_set_unack();
+		} else if (op_id % 5 == 4) {
+			sensor_get();
 		}
+		
 		op_id++;
 	}
 }
@@ -375,10 +430,10 @@ void initialize_led(void) {
 // Buttons
 // -------
 
-void configureButtons(void)
+void configure_buttons(void)
 {
 	int ret;
-	printk("configureButtons\n");
+	printk("configure_buttons\n");
 
 	const struct device *button;
 
@@ -444,12 +499,12 @@ static void bt_ready(int err) {
 void main(void)
 {
 	int err;
-	printk("switch yoyo\n");
+	printk("switch\n");
 
 	onoff_tid = 0;
 	hsl_tid = 0;
 
-	configureButtons();
+	configure_buttons();
 
 	initialize_led();
 	
