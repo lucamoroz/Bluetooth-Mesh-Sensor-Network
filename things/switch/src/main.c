@@ -109,6 +109,7 @@ static struct bt_mesh_cfg_srv cfg_srv = {
 	.net_transmit = BT_MESH_TRANSMIT(2, 20)
 };
 
+
 // -------------------------------------------------------------------------------------------------------
 // Health Server
 // -------------
@@ -118,9 +119,17 @@ static struct bt_mesh_health_srv health_srv = {
 	.cb = &health_srv_cb,
 };
 
+
 // -------------------------------------------------------------------------------------------------------
 // Generic OnOff Client Model
 // --------------------------
+
+#define BT_MESH_MODEL_OP_GENERIC_ONOFF_GET BT_MESH_MODEL_OP_2(0x82, 0x01)
+#define BT_MESH_MODEL_OP_GENERIC_ONOFF_SET BT_MESH_MODEL_OP_2(0x82, 0x02)
+#define BT_MESH_MODEL_OP_GENERIC_ONOFF_SET_UNACK BT_MESH_MODEL_OP_2(0x82, 0x03)
+#define BT_MESH_MODEL_OP_GENERIC_ONOFF_STATUS BT_MESH_MODEL_OP_2(0x82, 0x04)
+
+BT_MESH_MODEL_PUB_DEFINE(gen_onoff_cli, NULL, 2); // 2 = 1+1 = sizeof(on_of_off) + sizeof(tid)
 
 uint8_t onoff[] = {0,1};
 
@@ -132,17 +141,12 @@ static void generic_onoff_status(struct bt_mesh_model *model, struct bt_mesh_msg
 	printk("generic_onoff_status onoff=%d\n", onoff_state);
 }
 
-// generic on off client - message types defined by this model.
-#define BT_MESH_MODEL_OP_GENERIC_ONOFF_GET BT_MESH_MODEL_OP_2(0x82, 0x01)
-#define BT_MESH_MODEL_OP_GENERIC_ONOFF_SET BT_MESH_MODEL_OP_2(0x82, 0x02)
-#define BT_MESH_MODEL_OP_GENERIC_ONOFF_SET_UNACK BT_MESH_MODEL_OP_2(0x82, 0x03)
-#define BT_MESH_MODEL_OP_GENERIC_ONOFF_STATUS BT_MESH_MODEL_OP_2(0x82, 0x04)
-
 // specifies opcodes which each model is required to be able to receive (i.e. this generic onoff client)
 static const struct bt_mesh_model_op gen_onoff_cli_op[] = {
 	{BT_MESH_MODEL_OP_GENERIC_ONOFF_STATUS, 1, generic_onoff_status},
 	BT_MESH_MODEL_OP_END, // end of definition
 };
+
 
 // -------------------------------------------------------------------------------------------------------
 // Sensor client model
@@ -151,32 +155,33 @@ static const struct bt_mesh_model_op gen_onoff_cli_op[] = {
 #define BT_MESH_MODEL_OP_SENSOR_STATUS	BT_MESH_MODEL_OP_1(0x52)
 #define BT_MESH_MODEL_OP_SENSOR_GET	BT_MESH_MODEL_OP_2(0x82, 0x31)
 
-#define ID_TEMP_CELSIUS 0x2A1F
+#define ID_TEMP_CELSIUS 0x2A10
+#define ID_HUMIDITY		0x2A11
+#define ID_PRESSURE		0x2A12
 
-static void sens_temp_get(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
-	printk("sens_temp_get\n");
-}
+BT_MESH_MODEL_PUB_DEFINE(sens_temp_cli, NULL, 0); // Property ID not supported
+
 
 static void sens_temp_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
-	printk("sens_temp_status\n");
+	printk("sens_temp_status - buf len:%d\n",  buf->len);
+
 	printk("Sensor ID: 0x%04x\n", net_buf_simple_pull_le16(buf));
-	printk("Sensor value: 0x%04x\n\n", net_buf_simple_pull_le16(buf));
+	printk("Sensor value: 0x%08x\n\n", net_buf_simple_pull_le16(buf));
+	printk("Sensor ID: 0x%04x\n", net_buf_simple_pull_le16(buf));
+	printk("Sensor value: 0x%08x\n\n", net_buf_simple_pull_le16(buf));
+	printk("Sensor ID: 0x%04x\n", net_buf_simple_pull_le16(buf));
+	printk("Sensor value: 0x%08x\n\n", net_buf_simple_pull_le16(buf));
 }
 
 static const struct bt_mesh_model_op sens_temp_cli_op[] = {
-	{ BT_MESH_MODEL_OP_SENSOR_GET, 2, sens_temp_get },
-	{ BT_MESH_MODEL_OP_SENSOR_STATUS, 2, sens_temp_status },
+	{ BT_MESH_MODEL_OP_SENSOR_STATUS, 12, sens_temp_status },
 	BT_MESH_MODEL_OP_END,
 };
-
 
 
 // -------------------------------------------------------------------------------------------------------
 // Composition
 // -----------
-// define publication contexts (allocating messages ie net buffers)
-BT_MESH_MODEL_PUB_DEFINE(gen_onoff_cli, NULL, 2); // 2 = 1+1 = sizeof(on_of_off) + sizeof(tid)
-BT_MESH_MODEL_PUB_DEFINE(sens_temp_cli, NULL, 2); // 2 = sizeof(propertyID) 
 
 static struct bt_mesh_model sig_models[] = {
 	BT_MESH_MODEL_CFG_SRV(&cfg_srv),
@@ -185,9 +190,7 @@ static struct bt_mesh_model sig_models[] = {
 	BT_MESH_MODEL(BT_MESH_MODEL_ID_SENSOR_CLI, sens_temp_cli_op, &sens_temp_cli, NULL),
 };
 
-
 // define the element(s) which contain the previously defined models
-
 static struct bt_mesh_elem elements[] = {
 	BT_MESH_ELEM(0, sig_models, BT_MESH_MODEL_NONE), // .._MODEL_NONE means no vendor models
 };
@@ -198,6 +201,7 @@ static const struct bt_mesh_comp comp = {
 	.elem = elements,
 	.elem_count = ARRAY_SIZE(elements),
 };
+
 
 // Generic OnOff Client - TX message producer functions
 // -----------------------------------------------------------
@@ -259,6 +263,7 @@ void generic_onoff_set_unack(uint8_t on_or_off) {
 	}
 }
 
+
 // Sensor Client - TX message producer functions
 // -----------------------------------------------------------
 int sensor_get() {
@@ -272,9 +277,8 @@ int sensor_get() {
 	}
 
 	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_SENSOR_GET);
-	net_buf_simple_add_le16(msg, ID_TEMP_CELSIUS);
 
-	printk("publishing sensor set message\n");
+	printk("publishing sensor get message\n");
 	err = bt_mesh_model_publish(model);
 	if (err) {
 		printk("bt_mesh_model_publish err: %d\n", err);
@@ -299,7 +303,7 @@ void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t
 	if (!debounce()) {
 		printk("Button pressed at %" PRIu32 "\n", k_cycle_get_32());
 		
-		if (op_id % 5 == 0) {
+		if (op_id % 4 == 0) {
 			generic_onoff_set_unack(0);
 		} else if (op_id % 4 == 1) {
 			generic_onoff_set_unack(1);
@@ -409,8 +413,7 @@ static void bt_ready(int err) {
 }
 
 
-void main(void)
-{
+void main(void) {
 	int err;
 	printk("switch\n");
 

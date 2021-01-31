@@ -30,8 +30,18 @@ struct bt_mesh_model *reply_model;
 // device UUID
 static const uint8_t dev_uuid[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x01 };
 
-void thingy_led_on(int r, int g, int b)
-{
+// Timer and work required to periodically publish sensor data
+extern void publish_sensor_data(struct k_work *work);
+extern void sensor_timer_handler(struct k_timer *dummy);
+
+K_WORK_DEFINE(sensor_data_work, publish_sensor_data);
+K_TIMER_DEFINE(sensor_pub_timer, sensor_timer_handler, NULL);
+
+#define PUBLISH_INTERVAL 60
+
+
+
+void thingy_led_on(int r, int g, int b) {
 	// LEDs on Thingy are "active low" so zero means on. Args are expressed as RGB 0-255 values so we map them to GPIO low/high.
 	r = !(r / 255);
 	g = !(g / 255);
@@ -42,22 +52,19 @@ void thingy_led_on(int r, int g, int b)
 	gpio_pin_set(led_ctrlr, LED_B, b);
 }
 
-void thingy_led_off()
-{
+void thingy_led_off() {
 	gpio_pin_set(led_ctrlr, LED_R, 1);
 	gpio_pin_set(led_ctrlr, LED_G, 1);
 	gpio_pin_set(led_ctrlr, LED_B, 1);
 }
 
 // provisioning callback functions
-static void attention_on(struct bt_mesh_model *model)
-{
+static void attention_on(struct bt_mesh_model *model) {
 	printk("attention_on()\n");
 	thingy_led_on(255,0,0);
 }
 
-static void attention_off(struct bt_mesh_model *model)
-{
+static void attention_off(struct bt_mesh_model *model) {
 	printk("attention_off()\n");
 	thingy_led_off();
 }
@@ -76,11 +83,9 @@ static void provisioning_complete(uint16_t net_idx, uint16_t addr) {
     printk("Provisioning completed\n");
 }
 
-static void provisioning_reset(void)
-{
+static void provisioning_reset(void) {
 	bt_mesh_prov_enable(BT_MESH_PROV_ADV | BT_MESH_PROV_GATT);
 }
-
 
 // provisioning properties and capabilities
 static const struct bt_mesh_prov prov = {
@@ -92,12 +97,41 @@ static const struct bt_mesh_prov prov = {
 	.reset = provisioning_reset,
 };
 
-// generic onoff server message opcodes
+
+// -------------------------------------------------------------------------------------------------------
+// Configuration Server
+// --------------------
+static struct bt_mesh_cfg_srv cfg_srv = {
+		.relay = BT_MESH_RELAY_DISABLED,
+		.beacon = BT_MESH_BEACON_DISABLED,
+		.frnd = BT_MESH_FRIEND_NOT_SUPPORTED,
+		.gatt_proxy = BT_MESH_GATT_PROXY_ENABLED,
+		.default_ttl = 7,
+		/* 3 transmissions with 20ms interval */
+		.net_transmit = BT_MESH_TRANSMIT(2, 20),
+};
+
+// -------------------------------------------------------------------------------------------------------
+// Health Server
+// -------------
+
+BT_MESH_HEALTH_PUB_DEFINE(health_pub, 0);
+static struct bt_mesh_health_srv health_srv = {
+	.cb = &health_srv_cb,
+};
+
+
+// -------------------------------------------------------------------------------------------------------
+// Generic onoff model
+// -----------
+
 #define BT_MESH_MODEL_OP_GENERIC_ONOFF_GET BT_MESH_MODEL_OP_2(0x82, 0x01)
 #define BT_MESH_MODEL_OP_GENERIC_ONOFF_SET BT_MESH_MODEL_OP_2(0x82, 0x02)
 #define BT_MESH_MODEL_OP_GENERIC_ONOFF_SET_UNACK BT_MESH_MODEL_OP_2(0x82, 0x03)
 #define BT_MESH_MODEL_OP_GENERIC_ONOFF_STATUS BT_MESH_MODEL_OP_2(0x82, 0x04)
 
+// generic onoff server model publication context
+BT_MESH_MODEL_PUB_DEFINE(gen_onoff_pub, NULL, 2+1);
 
 static void set_onoff_state(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf, bool ack) {
 	uint8_t msg_onoff_state = net_buf_simple_pull_u8(buf);
@@ -134,7 +168,7 @@ static void generic_onoff_get(struct bt_mesh_model *model, struct bt_mesh_msg_ct
 	printk("ctx net_idx=0x%02x\n", ctx->net_idx);
 	printk("ctx app_idx=0x%02x\n", ctx->app_idx);
 	printk("ctx addr=0x%02x\n", ctx->addr);
-	printk("ctx recv_dst=0x%02x\n", ctx->recv_dst);
+	printk("ctx recv_dst=0x%02x\n", ctx->recv_dst);  // Note: this is the Publish Address
 
 	reply_addr = ctx->addr;
 	reply_net_idx = ctx->net_idx;
@@ -159,9 +193,6 @@ static const struct bt_mesh_model_op generic_onoff_op[] = {
     BT_MESH_MODEL_OP_END,
 };
 
-// generic onoff server model publication context
-BT_MESH_MODEL_PUB_DEFINE(gen_onoff_pub, NULL, 2+1);
-
 
 // -------------------------------------------------------------------------------------------------------
 // Sensor server model
@@ -170,19 +201,30 @@ BT_MESH_MODEL_PUB_DEFINE(gen_onoff_pub, NULL, 2+1);
 #define BT_MESH_MODEL_OP_SENSOR_STATUS	BT_MESH_MODEL_OP_1(0x52)
 #define BT_MESH_MODEL_OP_SENSOR_GET	BT_MESH_MODEL_OP_2(0x82, 0x31)
 
-#define ID_TEMP_CELSIUS 0x2A1F
+#define ID_TEMP_CELSIUS 0x2A10
+#define ID_HUMIDITY		0x2A11
+#define ID_PRESSURE		0x2A12
 
-BT_MESH_MODEL_PUB_DEFINE(sens_pup, NULL, 2+2);
+BT_MESH_MODEL_PUB_DEFINE(sens_pub, NULL, 2+2+2+2+2+2);
 
-static void sensor_temp_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
+static void sensor_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
 	struct net_buf_simple *msg = model->pub->msg;
 	int ret;
 
-	printk("sensor_temp_status\n");
+	printk("sensor_status\n");
+
+	if (buf->len > 0) {
+		printk("sensor_status with Property ID not supported!\n");
+		return;
+	}
 
 	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_SENSOR_STATUS);
 	net_buf_simple_add_le16(msg, ID_TEMP_CELSIUS);
 	net_buf_simple_add_le16(msg, 23); // TODO use real measurement
+	net_buf_simple_add_le16(msg, ID_HUMIDITY);
+	net_buf_simple_add_le16(msg, 22); // TODO use real measurement
+	net_buf_simple_add_le16(msg, ID_PRESSURE);
+	net_buf_simple_add_le16(msg, 21); // TODO use real measurement
 
 	ret = bt_mesh_model_publish(model);
 	if (ret) {
@@ -193,31 +235,8 @@ static void sensor_temp_status(struct bt_mesh_model *model, struct bt_mesh_msg_c
 }
 
 static const struct bt_mesh_model_op sens_temp_srv_op[] = {
-	{ BT_MESH_MODEL_OP_SENSOR_GET, 2, sensor_temp_status },
+	{ BT_MESH_MODEL_OP_SENSOR_GET, 0, sensor_status },
 	BT_MESH_MODEL_OP_END,
-};
-
-
-// -------------------------------------------------------------------------------------------------------
-// Configuration Server
-// --------------------
-static struct bt_mesh_cfg_srv cfg_srv = {
-		.relay = BT_MESH_RELAY_DISABLED,
-		.beacon = BT_MESH_BEACON_DISABLED,
-		.frnd = BT_MESH_FRIEND_NOT_SUPPORTED,
-		.gatt_proxy = BT_MESH_GATT_PROXY_ENABLED,
-		.default_ttl = 7,
-		/* 3 transmissions with 20ms interval */
-		.net_transmit = BT_MESH_TRANSMIT(2, 20),
-};
-
-// -------------------------------------------------------------------------------------------------------
-// Health Server
-// -------------
-
-BT_MESH_HEALTH_PUB_DEFINE(health_pub, 0);
-static struct bt_mesh_health_srv health_srv = {
-	.cb = &health_srv_cb,
 };
 
 // -------------------------------------------------------------------------------------------------------
@@ -228,7 +247,7 @@ static struct bt_mesh_model sig_models[] = {
 		BT_MESH_MODEL_CFG_SRV(&cfg_srv),
 		BT_MESH_MODEL_HEALTH_SRV(&health_srv, &health_pub),
         BT_MESH_MODEL(BT_MESH_MODEL_ID_GEN_ONOFF_SRV, generic_onoff_op, &gen_onoff_pub, NULL),
-		BT_MESH_MODEL(BT_MESH_MODEL_ID_SENSOR_SRV, sens_temp_srv_op, &sens_pup, NULL),
+		BT_MESH_MODEL(BT_MESH_MODEL_ID_SENSOR_SRV, sens_temp_srv_op, &sens_pub, NULL),
 };
 
 // node contains elements.note that BT_MESH_MODEL_NONE means "none of this type" ands here means "no vendor models"
@@ -283,6 +302,51 @@ void generic_onoff_status(bool publish, uint8_t on_or_off) {
 	}
 }
 
+// ----------------------------------------------------------------------------------------------------
+// sensor status TX message producer
+
+void publish_sensor_data(struct k_work *work) {
+	int err;
+	
+	// TODO get real data
+	uint16_t temperature = 1;
+	uint16_t humidity = 2;
+	uint16_t pressure = 3;
+
+	struct bt_mesh_model *model = &sig_models[3];
+
+	if (model->pub->addr == BT_MESH_ADDR_UNASSIGNED) {
+		printk("No publish address associated with the sensor model! Add one with a configuration app like nrf mesh\n");
+		return;
+	}
+
+	struct net_buf_simple *msg = model->pub->msg;
+
+	net_buf_simple_reset(msg);
+	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_SENSOR_STATUS);
+
+	net_buf_simple_add_le16(msg, ID_TEMP_CELSIUS);
+	net_buf_simple_add_le16(msg, temperature);
+
+	net_buf_simple_add_le16(msg, ID_HUMIDITY);
+	net_buf_simple_add_le16(msg, humidity);
+
+	net_buf_simple_add_le16(msg, ID_PRESSURE);
+	net_buf_simple_add_le16(msg, pressure);
+
+	printk("publishing sensor_data\n");
+	err = bt_mesh_model_publish(model);
+	if (err) {
+		printk("bt_mesh_publish error: %d\n", err);
+		return;
+	}
+}
+
+void sensor_timer_handler(struct k_timer *dummy) {
+	k_work_submit(&sensor_data_work);
+}
+
+
 static void bt_ready(int err) {
 	if (err)
 	{
@@ -292,8 +356,7 @@ static void bt_ready(int err) {
     printk("Bluetooth initialised OK\n");
 	err = bt_mesh_init(&prov, &comp);
 
-	if (err)
-	{
+	if (err) {
 		printk("bt_mesh_init failed with err %d\n", err);
 		return;
 	}
@@ -345,8 +408,9 @@ void main(void) {
 	rgb_b = 255;
 
 	int err = bt_enable(bt_ready);
-	if (err)
-	{
+	if (err) {
 		printk("bt_enable failed with err %d\n", err);
 	}
+
+	k_timer_start(&sensor_pub_timer, K_SECONDS(4), K_SECONDS(PUBLISH_INTERVAL));
 }
