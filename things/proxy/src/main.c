@@ -165,8 +165,13 @@ BT_MESH_MODEL_PUB_DEFINE(sens_temp_cli, NULL, 0); // Property ID not supported
 static void sens_temp_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
 	printk("sens_temp_status - buf len:%d\n",  buf->len);
 
+	// TODO parse according with specs
 	printk("Sensor ID: 0x%04x\n", net_buf_simple_pull_le16(buf));
 	printk("Sensor value: 0x%08x\n\n", net_buf_simple_pull_le16(buf));
+
+	if (buf->len <= 4) {
+		return;
+	}
 	printk("Sensor ID: 0x%04x\n", net_buf_simple_pull_le16(buf));
 	printk("Sensor value: 0x%08x\n\n", net_buf_simple_pull_le16(buf));
 	printk("Sensor ID: 0x%04x\n", net_buf_simple_pull_le16(buf));
@@ -174,7 +179,7 @@ static void sens_temp_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx
 }
 
 static const struct bt_mesh_model_op sens_temp_cli_op[] = {
-	{ BT_MESH_MODEL_OP_SENSOR_STATUS, 12, sens_temp_status },
+	{ BT_MESH_MODEL_OP_SENSOR_STATUS, 4, sens_temp_status },
 	BT_MESH_MODEL_OP_END,
 };
 
@@ -415,7 +420,7 @@ static void bt_ready(int err) {
 
 void main(void) {
 	int err;
-	printk("switch\n");
+	printk("thingy switch node\n");
 
 	onoff_tid = 0;
 

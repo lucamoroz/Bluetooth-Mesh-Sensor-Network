@@ -31,10 +31,10 @@ struct bt_mesh_model *reply_model;
 static const uint8_t dev_uuid[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x01 };
 
 // Timer and work required to periodically publish sensor data
-extern void publish_sensor_data(struct k_work *work);
+extern void publish_thp_sensor_data(struct k_work *work);
 extern void sensor_timer_handler(struct k_timer *dummy);
 
-K_WORK_DEFINE(sensor_data_work, publish_sensor_data);
+K_WORK_DEFINE(sensor_data_work, publish_thp_sensor_data);
 K_TIMER_DEFINE(sensor_pub_timer, sensor_timer_handler, NULL);
 
 #define PUBLISH_INTERVAL 60
@@ -205,16 +205,16 @@ static const struct bt_mesh_model_op generic_onoff_op[] = {
 #define ID_HUMIDITY		0x2A11
 #define ID_PRESSURE		0x2A12
 
-BT_MESH_MODEL_PUB_DEFINE(sens_pub, NULL, 2+2+2+2+2+2);
+BT_MESH_MODEL_PUB_DEFINE(sens_thp_pub, NULL, 2+2+2+2+2+2);
 
-static void sensor_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
+static void sensor_thp_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
 	struct net_buf_simple *msg = model->pub->msg;
 	int ret;
 
-	printk("sensor_status\n");
+	printk("sensor_thp_status\n");
 
 	if (buf->len > 0) {
-		printk("sensor_status with Property ID not supported!\n");
+		printk("sensor_thp_status with Property ID not supported!\n");
 		return;
 	}
 
@@ -234,10 +234,39 @@ static void sensor_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *c
 	printk("Sensor status published\n");
 }
 
-static const struct bt_mesh_model_op sens_temp_srv_op[] = {
-	{ BT_MESH_MODEL_OP_SENSOR_GET, 0, sensor_status },
+static const struct bt_mesh_model_op sens_thp_srv_op[] = {
+	{ BT_MESH_MODEL_OP_SENSOR_GET, 0, sensor_thp_status },
 	BT_MESH_MODEL_OP_END,
 };
+
+#define ID_GAS 0x2A13
+
+BT_MESH_MODEL_PUB_DEFINE(sens_gas_pub, NULL, 2+2);
+
+static void sens_gas_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
+	struct net_buf_simple *msg = model->pub->msg;
+	int ret;
+
+	printk("sens_gas_status\n");
+
+	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_SENSOR_STATUS);
+	net_buf_simple_add_le16(msg, ID_GAS);
+	net_buf_simple_add_le16(msg, 5); // TODO use real measurement
+
+	ret = bt_mesh_model_publish(model);
+	if (ret) {
+		printk("Error publishing sensor status: %d\n", ret);
+		return;
+	}
+	printk("Sensor status published\n");
+}
+
+static const struct bt_mesh_model_op sens_gas_srv_op[] = {
+	{ BT_MESH_MODEL_OP_SENSOR_GET, 0, sens_gas_status },
+	BT_MESH_MODEL_OP_END,
+};
+
+
 
 // -------------------------------------------------------------------------------------------------------
 // Composition
@@ -247,12 +276,17 @@ static struct bt_mesh_model sig_models[] = {
 		BT_MESH_MODEL_CFG_SRV(&cfg_srv),
 		BT_MESH_MODEL_HEALTH_SRV(&health_srv, &health_pub),
         BT_MESH_MODEL(BT_MESH_MODEL_ID_GEN_ONOFF_SRV, generic_onoff_op, &gen_onoff_pub, NULL),
-		BT_MESH_MODEL(BT_MESH_MODEL_ID_SENSOR_SRV, sens_temp_srv_op, &sens_pub, NULL),
+		BT_MESH_MODEL(BT_MESH_MODEL_ID_SENSOR_SRV, sens_thp_srv_op, &sens_thp_pub, NULL),
+};
+
+static struct bt_mesh_model sens_gas_model[] = {
+	BT_MESH_MODEL(BT_MESH_MODEL_ID_SENSOR_SRV, sens_gas_srv_op, &sens_gas_pub, NULL),
 };
 
 // node contains elements.note that BT_MESH_MODEL_NONE means "none of this type" ands here means "no vendor models"
 static struct bt_mesh_elem elements[] = {
 		BT_MESH_ELEM(0, sig_models, BT_MESH_MODEL_NONE),
+		BT_MESH_ELEM(1, sens_gas_model, BT_MESH_MODEL_NONE),
 };
 
 // node
@@ -305,7 +339,7 @@ void generic_onoff_status(bool publish, uint8_t on_or_off) {
 // ----------------------------------------------------------------------------------------------------
 // sensor status TX message producer
 
-void publish_sensor_data(struct k_work *work) {
+void publish_thp_sensor_data(struct k_work *work) {
 	int err;
 	
 	// TODO get real data
@@ -396,7 +430,7 @@ void indicate_on() {
 }
 
 void main(void) {
-	printk("thingy light node\n");
+	printk("thingy sensor node\n");
 
 	configure_thingy_led_controller();
 
