@@ -6,6 +6,8 @@
 #include <settings/settings.h>
 #include <bluetooth/mesh/proxy.h>
 
+#include <../lib/sensor_cli.h>
+
 // GPIO for the buttons
 #define SW0_NODE	DT_ALIAS(sw0)
 
@@ -73,7 +75,6 @@ static int provisioning_output_pin(bt_mesh_output_action_t act, uint32_t num) {
 	printk("OOB number: %04d\n", num);
 	return 0;
 }
-
 
 static void provisioning_complete(uint16_t net_idx, uint16_t addr) {
 	printk("Provisioning complete\n");
@@ -147,43 +148,6 @@ static const struct bt_mesh_model_op gen_onoff_cli_op[] = {
 	BT_MESH_MODEL_OP_END, // end of definition
 };
 
-
-// -------------------------------------------------------------------------------------------------------
-// Sensor client model
-// --------------------
-
-#define BT_MESH_MODEL_OP_SENSOR_STATUS	BT_MESH_MODEL_OP_1(0x52)
-#define BT_MESH_MODEL_OP_SENSOR_GET	BT_MESH_MODEL_OP_2(0x82, 0x31)
-
-#define ID_TEMP_CELSIUS 0x2A10
-#define ID_HUMIDITY		0x2A11
-#define ID_PRESSURE		0x2A12
-
-BT_MESH_MODEL_PUB_DEFINE(sens_temp_cli, NULL, 0); // Property ID not supported
-
-
-static void sens_temp_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
-	printk("sens_temp_status - buf len:%d\n",  buf->len);
-
-	// TODO parse according with specs
-	printk("Sensor ID: 0x%04x\n", net_buf_simple_pull_le16(buf));
-	printk("Sensor value: 0x%08x\n\n", net_buf_simple_pull_le16(buf));
-
-	if (buf->len <= 4) {
-		return;
-	}
-	printk("Sensor ID: 0x%04x\n", net_buf_simple_pull_le16(buf));
-	printk("Sensor value: 0x%08x\n\n", net_buf_simple_pull_le16(buf));
-	printk("Sensor ID: 0x%04x\n", net_buf_simple_pull_le16(buf));
-	printk("Sensor value: 0x%08x\n\n", net_buf_simple_pull_le16(buf));
-}
-
-static const struct bt_mesh_model_op sens_temp_cli_op[] = {
-	{ BT_MESH_MODEL_OP_SENSOR_STATUS, 4, sens_temp_status },
-	BT_MESH_MODEL_OP_END,
-};
-
-
 // -------------------------------------------------------------------------------------------------------
 // Composition
 // -----------
@@ -192,7 +156,7 @@ static struct bt_mesh_model sig_models[] = {
 	BT_MESH_MODEL_CFG_SRV(&cfg_srv),
 	BT_MESH_MODEL_HEALTH_SRV(&health_srv, &health_pub),
 	BT_MESH_MODEL(BT_MESH_MODEL_ID_GEN_ONOFF_CLI, gen_onoff_cli_op, &gen_onoff_cli, &onoff[0]),
-	BT_MESH_MODEL(BT_MESH_MODEL_ID_SENSOR_CLI, sens_temp_cli_op, &sens_temp_cli, NULL),
+	SENSOR_CLIENT_MODEL,
 };
 
 // define the element(s) which contain the previously defined models
@@ -268,30 +232,6 @@ void generic_onoff_set_unack(uint8_t on_or_off) {
 	}
 }
 
-
-// Sensor Client - TX message producer functions
-// -----------------------------------------------------------
-int sensor_get() {
-	struct bt_mesh_model *model = &sig_models[3];
-	struct net_buf_simple *msg = model->pub->msg;
-	int err;
-
-	if (model->pub->addr == BT_MESH_ADDR_UNASSIGNED) {
-		printk("No publishing address associated with the sensor client model - add one with a config app like nrf mesh\n");
-		return -1;
-	}
-
-	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_SENSOR_GET);
-
-	printk("publishing sensor get message\n");
-	err = bt_mesh_model_publish(model);
-	if (err) {
-		printk("bt_mesh_model_publish err: %d\n", err);
-	}
-	
-	return err;
-}
-
 bool debounce() {
 	bool ignore = false;
 	btn_time = k_uptime_get_32();
@@ -315,12 +255,24 @@ void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t
 		} else if (op_id % 4 == 2) {
 			generic_onoff_get();
 		} else if (op_id % 4 == 3) {
-			sensor_get();
+			sensor_cli_get(&sig_models[3]);
 		}
 		
 		op_id++;
 	}
 }
+
+// -------------------------------------------------------------------------------------------------------
+// Data callbacks
+// -------
+void thp_data_callback(uint16_t temperature, uint16_t humidity, uint16_t pressure) {
+	printk("thp_data_callback received temp: %d, hum: %d, press: %d\n", temperature, humidity, pressure);
+}
+
+void gas_data_callback(uint16_t ppm) {
+	printk("gas_data_callback received ppm: %d\n", ppm);
+}
+
 
 // -------------------------------------------------------------------------------------------------------
 // LED
@@ -434,8 +386,6 @@ void main(void) {
 		printk("bt_enable failed with err %d\n", err);
 	}
 	
-
-	while (1) {
-		k_msleep(100);
-	}
+	sensor_cli_set_thp_callback(&thp_data_callback);
+	sensor_cli_set_gas_callback(&gas_data_callback);
 }
