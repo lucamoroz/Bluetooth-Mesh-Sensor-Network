@@ -7,6 +7,7 @@
 #include <bluetooth/mesh/proxy.h>
 
 #include <../lib/sensor_cli.h>
+#include <../lib/gen_onoff_cli.h>
 
 // GPIO for the buttons
 #define SW0_NODE	DT_ALIAS(sw0)
@@ -28,7 +29,7 @@ static uint32_t btn_last_time = 0;
 static struct gpio_callback button_cb_data;
 
 // GPIO for LED 0
-struct device *led;
+const struct device *led;
 int op_id = 0;
 
 #define LED0_NODE	DT_ALIAS(led0)
@@ -43,7 +44,6 @@ int op_id = 0;
 
 static const uint8_t dev_uuid[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x00 };
 
-static uint8_t onoff_tid;
 
 void led_on(void) {
 	printk("turning led on\n");
@@ -120,34 +120,6 @@ static struct bt_mesh_health_srv health_srv = {
 	.cb = &health_srv_cb,
 };
 
-
-// -------------------------------------------------------------------------------------------------------
-// Generic OnOff Client Model
-// --------------------------
-
-#define BT_MESH_MODEL_OP_GENERIC_ONOFF_GET BT_MESH_MODEL_OP_2(0x82, 0x01)
-#define BT_MESH_MODEL_OP_GENERIC_ONOFF_SET BT_MESH_MODEL_OP_2(0x82, 0x02)
-#define BT_MESH_MODEL_OP_GENERIC_ONOFF_SET_UNACK BT_MESH_MODEL_OP_2(0x82, 0x03)
-#define BT_MESH_MODEL_OP_GENERIC_ONOFF_STATUS BT_MESH_MODEL_OP_2(0x82, 0x04)
-
-BT_MESH_MODEL_PUB_DEFINE(gen_onoff_cli, NULL, 2); // 2 = 1+1 = sizeof(on_of_off) + sizeof(tid)
-
-uint8_t onoff[] = {0,1};
-
-// generic on off client - handler functions for this model's RX messages
-static void generic_onoff_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
-	// buf contains the message payload (opcode excluded)
-	printk("generic_onoff_status\n");
-	uint8_t onoff_state = net_buf_simple_pull_u8(buf);
-	printk("generic_onoff_status onoff=%d\n", onoff_state);
-}
-
-// specifies opcodes which each model is required to be able to receive (i.e. this generic onoff client)
-static const struct bt_mesh_model_op gen_onoff_cli_op[] = {
-	{BT_MESH_MODEL_OP_GENERIC_ONOFF_STATUS, 1, generic_onoff_status},
-	BT_MESH_MODEL_OP_END, // end of definition
-};
-
 // -------------------------------------------------------------------------------------------------------
 // Composition
 // -----------
@@ -155,7 +127,7 @@ static const struct bt_mesh_model_op gen_onoff_cli_op[] = {
 static struct bt_mesh_model sig_models[] = {
 	BT_MESH_MODEL_CFG_SRV(&cfg_srv),
 	BT_MESH_MODEL_HEALTH_SRV(&health_srv, &health_pub),
-	BT_MESH_MODEL(BT_MESH_MODEL_ID_GEN_ONOFF_CLI, gen_onoff_cli_op, &gen_onoff_cli, &onoff[0]),
+	GEN_ONOFF_CLI_MODEL,
 	SENSOR_CLIENT_MODEL,
 };
 
@@ -171,106 +143,17 @@ static const struct bt_mesh_comp comp = {
 	.elem_count = ARRAY_SIZE(elements),
 };
 
-
-// Generic OnOff Client - TX message producer functions
-// -----------------------------------------------------------
-int generic_onoff_get() {
-	printk("generic_onoff_get\n");
-	int err;
-	struct bt_mesh_model *model = &sig_models[2];
-	if (model->pub->addr == BT_MESH_ADDR_UNASSIGNED) {
-		printk("No publish address associated with the generic onoff client model: add one with a configuration app like nRF Mesh\n");
-		return -1;
-	}
-
-	// msg was created with the BT_MESH_MODEL_PUB_DEFINE macro
-	struct net_buf_simple *msg = model->pub->msg;
-	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_GENERIC_ONOFF_GET);
-	printk("Publishing get onoff message\n");
-	err = bt_mesh_model_publish(model);
-	if (err) {
-		printk("bt_mesh_model_publish error %d", err);
-	}
-	return err;
-}
-
-// function used for both set ack and unack, distinguished by param msg_type
-int send_gen_onoff_set(uint8_t on_or_off, uint16_t msg_type) {
-	int err;
-	struct bt_mesh_model *model = &sig_models[2];
-	if (model->pub->addr == BT_MESH_ADDR_UNASSIGNED) {
-		printk("No publish address associated with the generic onoff client model: add one with a configuration app like nRF Mesh\n");
-		return -1;
-	}
-
-	struct net_buf_simple *msg = model->pub->msg;
-	bt_mesh_model_msg_init(msg, msg_type);
-	net_buf_simple_add_u8(msg, on_or_off);
-	net_buf_simple_add_u8(msg, onoff_tid);
-	onoff_tid++; 
-	printk("Publishing set onoff state=0x%02x\n", on_or_off);
-	err = bt_mesh_model_publish(model);
-	if (err) {
-		printk("bt_mesh_model_publish error %d", err);
-	}
-	return err;
-}
-
-void generic_onoff_set(uint8_t on_or_off) {
-	if (send_gen_onoff_set(on_or_off, BT_MESH_MODEL_OP_GENERIC_ONOFF_SET)) {
-		printk("Unable to send generic onoff set message\n");
-	} else {
-		printk("onoff set message %d sent\n", on_or_off);
-	}
-}
-
-void generic_onoff_set_unack(uint8_t on_or_off) {
-	if (send_gen_onoff_set(on_or_off, BT_MESH_MODEL_OP_GENERIC_ONOFF_SET_UNACK)) {
-		printk("Unable to send generic onoff set unack message\n");
-	} else {
-		printk("onoff set unack message %d sent\n", on_or_off);
-	}
-}
-
-bool debounce() {
-	bool ignore = false;
-	btn_time = k_uptime_get_32();
-	if (btn_time < (btn_last_time + BUTTON_DEBOUNCE_DELAY_MS)) {
-		ignore = true;
-	} else {
-		ignore = false;
-	}
-	btn_last_time = btn_time;
-	return ignore;
-}
-
-void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins) {	
-	if (!debounce()) {
-		printk("Button pressed at %" PRIu32 "\n", k_cycle_get_32());
-		
-		if (op_id % 4 == 0) {
-			generic_onoff_set_unack(0);
-		} else if (op_id % 4 == 1) {
-			generic_onoff_set_unack(1);
-		} else if (op_id % 4 == 2) {
-			generic_onoff_get();
-		} else if (op_id % 4 == 3) {
-			sensor_cli_get(&sig_models[3]);
-		}
-		
-		op_id++;
-	}
-}
-
 // -------------------------------------------------------------------------------------------------------
 // Data callbacks
 // -------
 void thp_data_callback(uint16_t temperature, uint16_t humidity, uint16_t pressure) {
 	printk("thp_data_callback received temp: %d, hum: %d, press: %d\n", temperature, humidity, pressure);
+	// TODO forward to Raspberry Pi
 }
 
 void gas_data_callback(uint16_t ppm) {
 	printk("gas_data_callback received ppm: %d\n", ppm);
+	// TODO forward to Raspberry Pi
 }
 
 
@@ -303,6 +186,36 @@ void initialize_led(void) {
 // -------------------------------------------------------------------------------------------------------
 // Buttons
 // -------
+
+bool debounce() {
+	bool ignore = false;
+	btn_time = k_uptime_get_32();
+	if (btn_time < (btn_last_time + BUTTON_DEBOUNCE_DELAY_MS)) {
+		ignore = true;
+	} else {
+		ignore = false;
+	}
+	btn_last_time = btn_time;
+	return ignore;
+}
+
+void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins) {	
+	if (!debounce()) {
+		printk("Button pressed at %" PRIu32 "\n", k_cycle_get_32());
+		
+		if (op_id % 4 == 0) {
+			gen_onoff_set_unack(0);
+		} else if (op_id % 4 == 1) {
+			gen_onoff_set_unack(1);
+		} else if (op_id % 4 == 2) {
+			gen_onoff_get(&sig_models[2]);
+		} else if (op_id % 4 == 3) {
+			sensor_cli_get(&sig_models[3]);
+		}
+		
+		op_id++;
+	}
+}
 
 void configure_buttons(void)
 {
