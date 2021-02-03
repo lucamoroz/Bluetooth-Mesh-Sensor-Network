@@ -2,9 +2,10 @@
 #include <bluetooth/bluetooth.h>
 #include <settings/settings.h>
 #include <bluetooth/mesh.h>
-#include <../lib/thp_sensor.h>
-#include <../lib/gas_sensor.h>
-#include <../lib/generic_onoff.h>
+
+#include <../lib/models/thp_sensor.h>
+#include <../lib/models/gas_sensor.h>
+#include <../lib/models/generic_onoff.h>
 
 
 // usually set by the manufacturer - hard coded here for convenience

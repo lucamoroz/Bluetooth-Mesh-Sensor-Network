@@ -2,7 +2,7 @@
 #define THP_SENSOR_H
 
 #include <bluetooth/mesh.h>
-#include "thp_reader.h"
+#include "../sensors/thp_reader.h"
 
 #define BT_MESH_MODEL_OP_SENSOR_STATUS	BT_MESH_MODEL_OP_1(0x52)
 #define BT_MESH_MODEL_OP_SENSOR_GET	BT_MESH_MODEL_OP_2(0x82, 0x31)

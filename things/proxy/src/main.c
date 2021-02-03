@@ -6,8 +6,8 @@
 #include <settings/settings.h>
 #include <bluetooth/mesh/proxy.h>
 
-#include <../lib/sensor_cli.h>
-#include <../lib/gen_onoff_cli.h>
+#include <../lib/models/sensor_cli.h>
+#include <../lib/models/gen_onoff_cli.h>
 
 // GPIO for the buttons
 #define SW0_NODE	DT_ALIAS(sw0)
