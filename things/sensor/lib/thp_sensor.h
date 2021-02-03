@@ -11,17 +11,32 @@
 #define ID_HUMIDITY		0x2A11
 #define ID_PRESSURE		0x2A12
 
-// Timer and work required to periodically publish sensor data
-extern void thp_sensor_data_kwork(struct k_work *work);
-extern void thp_sensor_timer_handler(struct k_timer *dummy);
+/**
+ * This callback will be executed right before the periodic publish step, it populates
+ * the network buffer.
+ * The publish period can be set using an app like nRF Mesh (e.g. model -> set publication).
+ * Note that the publication will be ignored if no publish address is set!
+ * */
+int thp_sensor_update_cb(struct bt_mesh_model *mod) {
+	printk("thp_sensor_update_cb\n");
 
-K_WORK_DEFINE(thp_sensor_data_work, thp_sensor_data_kwork);
-K_TIMER_DEFINE(thp_sensor_pub_timer, thp_sensor_timer_handler, NULL);
+	uint16_t temperature, humidity, pressure;
+	struct net_buf_simple *msg = mod->pub->msg;
 
-#define PUBLISH_INTERVAL 60
+	read_thp(&temperature, &humidity, &pressure);
 
+	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_SENSOR_STATUS);
+	net_buf_simple_add_le16(msg, ID_TEMP_CELSIUS);
+	net_buf_simple_add_le16(msg, temperature); 
+	net_buf_simple_add_le16(msg, ID_HUMIDITY);
+	net_buf_simple_add_le16(msg, humidity);
+	net_buf_simple_add_le16(msg, ID_PRESSURE);
+	net_buf_simple_add_le16(msg, pressure);
+	
+	return 0;
+}
 
-BT_MESH_MODEL_PUB_DEFINE(thp_sens_pub, NULL, 2+2+2+2+2+2);
+BT_MESH_MODEL_PUB_DEFINE(thp_sens_pub, thp_sensor_update_cb, 2+2+2+2+2+2);
 
 static void sensor_thp_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
 	uint16_t temperature, humidity, pressure;
@@ -60,7 +75,9 @@ static const struct bt_mesh_model_op thp_sens_srv_op[] = {
 
 #define THP_SENSOR_MODEL BT_MESH_MODEL(BT_MESH_MODEL_ID_SENSOR_SRV, thp_sens_srv_op, &thp_sens_pub, NULL)
 
-
+/**
+ * Can be used to force publication.
+ * */
 static void thp_sensor_publish_data() {
 	uint16_t temperature, humidity, pressure;
 	int err;
@@ -96,19 +113,5 @@ static void thp_sensor_publish_data() {
 		return;
 	}
 }
-
-void thp_sensor_data_kwork(struct k_work *work) {
-	thp_sensor_publish_data();
-}
-
-void thp_sensor_timer_handler(struct k_timer *dummy) {
-	k_work_submit(&thp_sensor_data_work);
-}
-
-void thp_sensor_start() {
-	printk("starting thp_sensor");
-	k_timer_start(&thp_sensor_pub_timer, K_SECONDS(4), K_SECONDS(PUBLISH_INTERVAL));
-}
-
 
 #endif //THP_SENSOR_H

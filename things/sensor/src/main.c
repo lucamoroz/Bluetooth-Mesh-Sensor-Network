@@ -144,7 +144,6 @@ void main(void) {
 		printk("bt_enable failed with err %d\n", err);
 	}
 
-	thp_sensor_start();
 	gas_sensor_start();
 	generic_onoff_setup();
 }
