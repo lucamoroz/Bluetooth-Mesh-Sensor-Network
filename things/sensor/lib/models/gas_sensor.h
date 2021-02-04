@@ -2,7 +2,9 @@
 #define GAS_SENSOR_H
 
 #include <bluetooth/mesh.h>
-#include "../sensors/gas_reader.h"
+#include "../sensors/ccs811.h"
+
+const struct device *ccs811;
 
 #define BT_MESH_MODEL_OP_SENSOR_STATUS	BT_MESH_MODEL_OP_1(0x52)
 #define BT_MESH_MODEL_OP_SENSOR_GET	BT_MESH_MODEL_OP_2(0x82, 0x31)
@@ -12,13 +14,22 @@
 BT_MESH_MODEL_PUB_DEFINE(gas_sens_pub, NULL, 2+2);
 
 static void gas_sensor_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
-    uint16_t ppm;
+    struct sensor_value ppm_reading;
 	struct net_buf_simple *msg = model->pub->msg;
 	int ret;
 
 	printk("gas_sensor_status\n");
 
-    read_gas(&ppm);
+	if (ccs811 == NULL) {
+		printk("Can't read ccs811 sensor value: null ref to device\n");
+		return;
+	}
+    if (ccs811_fetch(ccs811, &ppm_reading) < 0) {
+		printk("Couldn't publish gas sensor status: error reading sensor value\n");
+		return;
+	}
+	
+	uint16_t ppm = (int) sensor_value_to_double(&ppm_reading);
 
 	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_SENSOR_STATUS);
 	net_buf_simple_add_le16(msg, ID_GAS);
@@ -39,7 +50,7 @@ static const struct bt_mesh_model_op gas_sens_srv_op[] = {
 
 #define GAS_SENSOR_MODEL BT_MESH_MODEL(BT_MESH_MODEL_ID_SENSOR_SRV, gas_sens_srv_op, &gas_sens_pub, NULL)
 
-void gas_sensor_publish_data(uint16_t ppm) {
+void gas_sensor_publish_data(struct sensor_value *ppm_reading) {
     int err;
     struct bt_mesh_model model = GAS_SENSOR_MODEL;
 
@@ -52,13 +63,15 @@ void gas_sensor_publish_data(uint16_t ppm) {
 		return;
 	}
 
+	uint16_t ppm = (int) sensor_value_to_double(ppm_reading);
+
     net_buf_simple_reset(msg);
 	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_SENSOR_STATUS);
 
     net_buf_simple_add_le16(msg, ID_GAS);
 	net_buf_simple_add_le16(msg, ppm);
 
-    printk("publishing sensor_data\n");
+    printk("publishing sensor_data: ppm %d\n", ppm);
 	err = bt_mesh_model_publish(&model);
 	if (err) {
 		printk("bt_mesh_publish error: %d\n", err);
@@ -66,8 +79,13 @@ void gas_sensor_publish_data(uint16_t ppm) {
 	}
 }
 
-void gas_sensor_start() {
-    gas_reader_set_callback(&gas_sensor_publish_data);
+int gas_sensor_setup(int32_t trigger_threshold) {
+	ccs811 = ccs811_setup(&gas_sensor_publish_data, trigger_threshold);
+	if (ccs811 == NULL) {
+		printk("Couldn't setup gas_sensor: error setting device\n");
+		return -1;
+	}
+	return 0;
 }
 
 #endif //GAS_SENSOR_H

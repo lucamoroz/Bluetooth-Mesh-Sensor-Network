@@ -9,6 +9,9 @@
 #ifndef CCS811_H
 #define CCS811_H
 
-const struct device *ccs811_setup();
+typedef void (*gas_data_cb)(struct sensor_value *ppm);
+
+const struct device *ccs811_setup(gas_data_cb cb, int32_t trigger_threshold);
+int ccs811_fetch(const struct device *dev, struct sensor_value *ppm);
 
 #endif // CCS811_H

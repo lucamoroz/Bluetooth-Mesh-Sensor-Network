@@ -8,6 +8,6 @@
 #define LPS22HB_H
 
 const struct device *lps22hb_setup();
-void lps22hb_handler(const struct device *dev);
+int lps22hb_handler(const struct device *dev, struct sensor_value *pressure);
 
 #endif // LPS22HB_H

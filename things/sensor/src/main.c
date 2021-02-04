@@ -7,6 +7,7 @@
 #include <../lib/models/gas_sensor.h>
 #include <../lib/models/generic_onoff.h>
 
+#define GAS_TRIGGER_THRESHOLD 800
 
 // usually set by the manufacturer - hard coded here for convenience
 // device UUID
@@ -144,7 +145,16 @@ void main(void) {
 	if (err) {
 		printk("bt_enable failed with err %d\n", err);
 	}
+	
+	err = thp_sensor_setup();
+	if (err) {
+		printk("Error starting thp sensor\n");
+	}
 
-	gas_sensor_start();
+	err = gas_sensor_setup(GAS_TRIGGER_THRESHOLD);
+	if (err) {
+		printk("Error starting gas sensor\n");
+	}
+
 	generic_onoff_setup();
 }

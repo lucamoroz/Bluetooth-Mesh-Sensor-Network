@@ -1,21 +1,21 @@
 #include "lps22hb.h"
 
-void lps22hb_handler(const struct device *dev)
+int lps22hb_handler(const struct device *dev, struct sensor_value *pressure)
 {
-  struct sensor_value pressure;
-
   if (sensor_sample_fetch(dev) < 0) {
     printk("Sensor sample update error\n");
-    return;
+    return -1;
   }
 
-  if (sensor_channel_get(dev, SENSOR_CHAN_PRESS, &pressure) < 0) {
+  if (sensor_channel_get(dev, SENSOR_CHAN_PRESS, pressure) < 0) {
     printk("Cannot read LPS22HB pressure channel\n");
-    return;
+    return -1;
   }
 
   /* display pressure */
-  printk("Pressure:%.1f kPa\n", sensor_value_to_double(&pressure));
+  printk("Pressure:%.1f kPa\n", sensor_value_to_double(pressure));
+
+  return 0;
 }
 
 const struct device *lps22hb_setup()

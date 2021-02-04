@@ -23,7 +23,10 @@ int thp_sensor_update_cb(struct bt_mesh_model *mod) {
 	uint16_t temperature, humidity, pressure;
 	struct net_buf_simple *msg = mod->pub->msg;
 
-	read_thp(&temperature, &humidity, &pressure);
+	if (read_thp(&temperature, &humidity, &pressure)) {
+		printk("Couldn't send thp status message: error reading temperature, humidity and pressure\n");
+		return -1;
+	}
 
 	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_SENSOR_STATUS);
 	net_buf_simple_add_le16(msg, ID_TEMP_CELSIUS);
@@ -32,6 +35,8 @@ int thp_sensor_update_cb(struct bt_mesh_model *mod) {
 	net_buf_simple_add_le16(msg, humidity);
 	net_buf_simple_add_le16(msg, ID_PRESSURE);
 	net_buf_simple_add_le16(msg, pressure);
+
+	printk("Publishing sensor data: temp %d, hum: %d, press: %d\n", temperature, humidity, pressure);
 	
 	return 0;
 }
@@ -50,7 +55,10 @@ static void sensor_thp_status(struct bt_mesh_model *model, struct bt_mesh_msg_ct
 		return;
 	}
 
-	read_thp(&temperature, &humidity, &pressure);
+	if (read_thp(&temperature, &humidity, &pressure) < 0) {
+		printk("Couldn't send thp status message: error reading temperature, humidity and pressure\n");
+		return;
+	}
 
 	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_SENSOR_STATUS);
 	net_buf_simple_add_le16(msg, ID_TEMP_CELSIUS);
@@ -60,6 +68,7 @@ static void sensor_thp_status(struct bt_mesh_model *model, struct bt_mesh_msg_ct
 	net_buf_simple_add_le16(msg, ID_PRESSURE);
 	net_buf_simple_add_le16(msg, pressure);
 
+	printk("Publishing sensor data: temp %d, hum: %d, press: %d\n", temperature, humidity, pressure);
 	ret = bt_mesh_model_publish(model);
 	if (ret) {
 		printk("Error publishing sensor status: %d\n", ret);
@@ -92,7 +101,9 @@ static void thp_sensor_publish_data() {
 		return;
 	}
 
-	read_thp(&temperature, &humidity, &pressure);
+	if (read_thp(&temperature, &humidity, &pressure)) {
+		return;
+	}
 	
 	net_buf_simple_reset(msg);
 	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_SENSOR_STATUS);
@@ -106,12 +117,17 @@ static void thp_sensor_publish_data() {
 	net_buf_simple_add_le16(msg, ID_PRESSURE);
 	net_buf_simple_add_le16(msg, pressure);
 
-	printk("publishing sensor_data\n");
+	printk("Publishing sensor data: temp %d, hum: %d, press: %d\n", temperature, humidity, pressure);
 	err = bt_mesh_model_publish(&model);
 	if (err) {
 		printk("bt_mesh_publish error: %d\n", err);
 		return;
 	}
+	printk("Sensor status published\n");
+}
+
+int thp_sensor_setup() {
+	return thp_reader_setup();
 }
 
 #endif //THP_SENSOR_H

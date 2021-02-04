@@ -8,6 +8,6 @@
 #define HTS221_H
 
 const struct device *hts221_setup();
-void hts221_handler(const struct device *dev);
+int hts221_handler(const struct device *dev, struct sensor_value *temp, struct sensor_value *hum);
 
 #endif // HTS221_H

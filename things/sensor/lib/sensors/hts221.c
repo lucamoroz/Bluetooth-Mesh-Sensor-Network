@@ -1,28 +1,29 @@
 #include "hts221.h"
 
-void hts221_handler(const struct device *dev)
+int hts221_handler(const struct device *dev, struct sensor_value *temp, struct sensor_value *hum)
 {
-  struct sensor_value temp, hum;
   if (sensor_sample_fetch(dev) < 0) {
     printk("Sensor sample update error\n");
-    return;
+    return -1;
   }
 
-  if (sensor_channel_get(dev, SENSOR_CHAN_AMBIENT_TEMP, &temp) < 0) {
+  if (sensor_channel_get(dev, SENSOR_CHAN_AMBIENT_TEMP, temp) < 0) {
     printk("Cannot read HTS221 temperature channel\n");
-    return;
+    return -1;
   }
 
-  if (sensor_channel_get(dev, SENSOR_CHAN_HUMIDITY, &hum) < 0) {
+  if (sensor_channel_get(dev, SENSOR_CHAN_HUMIDITY, hum) < 0) {
     printk("Cannot read HTS221 humidity channel\n");
-    return;
+    return -1;
   }
 
   /* display temperature */
-  printk("Temperature:%.1f C\n", sensor_value_to_double(&temp));
-
+  printk("Temperature:%.1f C\n", sensor_value_to_double(temp));
+  
   /* display humidity */
-  printk("Relative Humidity:%.1f%%\n", sensor_value_to_double(&hum));
+  printk("Relative Humidity:%.1f%%\n", sensor_value_to_double(hum));
+
+  return 0;
 }
 
 const struct device *hts221_setup()

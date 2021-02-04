@@ -1,10 +1,10 @@
 #include "ccs811.h"
 
 static bool app_fw_2;
+gas_data_cb gas_callback = NULL;
 
-static int ccs811_fetch(const struct device *dev)
+int ccs811_fetch(const struct device *dev, struct sensor_value *co2)
 {
-  struct sensor_value co2;
   int rc = 0;
 
   if (rc == 0) {
@@ -13,8 +13,8 @@ static int ccs811_fetch(const struct device *dev)
   if (rc == 0) {
     const struct ccs811_result_type *rp = ccs811_result(dev);
 
-    sensor_channel_get(dev, SENSOR_CHAN_CO2, &co2);
-    printk("\nCCS811: %u ppm eCO2;\n", co2.val1);
+    sensor_channel_get(dev, SENSOR_CHAN_CO2, co2);
+    printk("\nCCS811: %u ppm eCO2;\n", co2->val1);
 
     if (app_fw_2 && !(rp->status & CCS811_STATUS_DATA_READY)) {
       printk("STALE DATA\n");
@@ -29,10 +29,12 @@ static int ccs811_fetch(const struct device *dev)
 
 static void ccs811_trigger_handler(const struct device *dev, struct sensor_trigger *trig)
 {
-  int rc = ccs811_fetch(dev);
+  struct sensor_value co2;
+  int rc = ccs811_fetch(dev, &co2);
 
   if (rc == 0) {
     printk("Triggered fetch got %d\n", rc);
+    gas_callback(&co2);
   } else if (-EAGAIN == rc) {
     printk("Triggered fetch got stale data\n");
   } else {
@@ -40,7 +42,7 @@ static void ccs811_trigger_handler(const struct device *dev, struct sensor_trigg
   }
 }
 
-const struct device *ccs811_setup()
+const struct device *ccs811_setup(gas_data_cb cb, int32_t trigger_threshold)
 {
   const struct device *dev = device_get_binding(DT_LABEL(DT_INST(0, ams_ccs811)));
   struct ccs811_configver_type cfgver;
@@ -65,7 +67,7 @@ const struct device *ccs811_setup()
   printk("Triggering on threshold:\n");
   if (rc == 0) {
     struct sensor_value thr = {
-      .val1 = 800,
+      .val1 = trigger_threshold,
     };
     rc = sensor_attr_set(dev, SENSOR_CHAN_CO2,
              SENSOR_ATTR_LOWER_THRESH,
@@ -90,6 +92,7 @@ const struct device *ccs811_setup()
   printk("Trigger installation got: %d\n", rc);
 
   if (rc == 0) {
+    gas_callback = cb;
     return dev;
   } else {
     return NULL;
