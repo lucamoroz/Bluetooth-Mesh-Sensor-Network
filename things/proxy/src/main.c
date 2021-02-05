@@ -156,6 +156,12 @@ void thp_data_callback(float temperature, float humidity, float pressure, uint16
 void gas_data_callback(uint16_t ppm, uint16_t recv_dest) {
 	printf("\n\ngas_data_callback received ppm: %d. Pub address: 0x%02x\n\n", ppm, recv_dest);
 	
+	if (ppm > GAS_TRIGGER_THRESHOLD) {
+		led_on();
+	} else {
+		led_off();
+	}
+	
 	// TODO forward to Raspberry Pi
 }
 
