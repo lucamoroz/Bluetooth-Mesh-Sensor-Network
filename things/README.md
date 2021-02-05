@@ -12,6 +12,9 @@ Open the project (e.g. proxy) from PIO Home and press `ctrl+alt+u`
 
 Alternatively, from the project rood dir run `pio run --target upload --environment thingy_52`
 
+# Erase
+To reset the devices (e.g. to perform provisioning again), run: `nrfjprog -e`
+
 # Debug
 ## Serial messages
 1. Install Segger JLink RTT: segger.com/products/debug-probes/j-link/technology/about-real-time-transfer/

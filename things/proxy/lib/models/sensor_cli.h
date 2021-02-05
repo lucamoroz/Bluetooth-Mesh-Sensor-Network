@@ -2,8 +2,9 @@
 #define SENSOR_CLI_H
 
 #include <bluetooth/mesh.h>
+#include <stdio.h>
 
-typedef void (*thp_data_cb)(uint16_t temperature, uint16_t humidity, uint16_t pressure, uint16_t recv_dest);
+typedef void (*thp_data_cb)(float temperature, float humidity, float pressure, uint16_t recv_dest);
 typedef void (*gas_data_cb)(uint16_t ppm, uint16_t recv_dest);
 
 thp_data_cb thp_callback = NULL;
@@ -44,20 +45,22 @@ static void sensor_cli_status(struct bt_mesh_model *model, struct bt_mesh_msg_ct
         }
         
     } else if (buf->len == 12) {
-
+        
+        // Sensor values are sent as unsigned integers due to zephyr problems when sending 32-bit values
+        // on net_buf_simple
         uint16_t temp_sensor_id = net_buf_simple_pull_le16(buf);
-        uint16_t temperature = net_buf_simple_pull_le16(buf);
+        float temperature = ((float) net_buf_simple_pull_le16(buf)) / 100;
         uint16_t hum_sensor_id = net_buf_simple_pull_le16(buf);
-        uint16_t humidity = net_buf_simple_pull_le16(buf);
+        float humidity = ((float) net_buf_simple_pull_le16(buf)) / 100;
         uint16_t pres_sensor_id = net_buf_simple_pull_le16(buf);
-        uint16_t pressure = net_buf_simple_pull_le16(buf);
+        float pressure = ((float) net_buf_simple_pull_le16(buf)) / 100;
 
-        printk("Sensor ID: 0x%04x\n", temp_sensor_id);
-	    printk("Sensor value: %d\n", temperature);
-        printk("Sensor ID: 0x%04x\n", hum_sensor_id);
-	    printk("Sensor value: %d\n", humidity);
-        printk("Sensor ID: 0x%04x\n", pres_sensor_id);
-	    printk("Sensor value: %d\n", pressure);
+        printf("\nSensor ID: 0x%04x", temp_sensor_id);
+	    printf("\nSensor value: %.2f", temperature);
+        printf("\nSensor ID: 0x%04x", hum_sensor_id);
+	    printf("\nSensor value: %.2f", humidity);
+        printf("\nSensor ID: 0x%04x", pres_sensor_id);
+	    printf("\nSensor value: %.2f\n", pressure);
 
         if (thp_callback != NULL) {
             thp_callback(temperature, humidity, pressure, ctx->recv_dst);

@@ -13,7 +13,7 @@ int lps22hb_handler(const struct device *dev, struct sensor_value *pressure)
   }
 
   /* display pressure */
-  printk("Pressure:%.1f kPa\n", sensor_value_to_double(pressure));
+  printf("\nPressure:%.1f kPa\n", sensor_value_to_double(pressure));
 
   return 0;
 }

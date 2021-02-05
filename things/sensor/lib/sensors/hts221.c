@@ -18,10 +18,10 @@ int hts221_handler(const struct device *dev, struct sensor_value *temp, struct s
   }
 
   /* display temperature */
-  printk("Temperature:%.1f C\n", sensor_value_to_double(temp));
+  printf("\nTemperature:%.1f C\n", sensor_value_to_double(temp));
   
   /* display humidity */
-  printk("Relative Humidity:%.1f%%\n", sensor_value_to_double(hum));
+  printf("\nRelative Humidity:%.1f%%\n", sensor_value_to_double(hum));
 
   return 0;
 }

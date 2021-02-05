@@ -22,6 +22,8 @@
 
 #define BUTTON_DEBOUNCE_DELAY_MS 250
 
+#define GAS_TRIGGER_THRESHOLD 800
+
 // for debouncing the button
 static uint32_t btn_time = 0;
 static uint32_t btn_last_time = 0;
@@ -146,13 +148,14 @@ static const struct bt_mesh_comp comp = {
 // -------------------------------------------------------------------------------------------------------
 // Data callbacks
 // -------
-void thp_data_callback(uint16_t temperature, uint16_t humidity, uint16_t pressure, uint16_t recv_dest) {
-	printk("thp_data_callback received temp: %d, hum: %d, press: %d. Pub address: 0x%02x\n", temperature, humidity, pressure, recv_dest);
+void thp_data_callback(float temperature, float humidity, float pressure, uint16_t recv_dest) {
+	printf("\n\nthp_data_callback received temp: %.2f, hum: %.2f, press: %.2f. Pub address: 0x%02x\n\n", temperature, humidity, pressure, recv_dest);
 	// TODO forward to Raspberry Pi
 }
 
 void gas_data_callback(uint16_t ppm, uint16_t recv_dest) {
-	printk("gas_data_callback received ppm: %d. Pub address: 0x%02x\n", ppm, recv_dest);
+	printf("\n\ngas_data_callback received ppm: %d. Pub address: 0x%02x\n\n", ppm, recv_dest);
+	
 	// TODO forward to Raspberry Pi
 }
 
