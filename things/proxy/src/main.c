@@ -146,13 +146,13 @@ static const struct bt_mesh_comp comp = {
 // -------------------------------------------------------------------------------------------------------
 // Data callbacks
 // -------
-void thp_data_callback(uint16_t temperature, uint16_t humidity, uint16_t pressure) {
-	printk("thp_data_callback received temp: %d, hum: %d, press: %d\n", temperature, humidity, pressure);
+void thp_data_callback(uint16_t temperature, uint16_t humidity, uint16_t pressure, uint16_t recv_dest) {
+	printk("thp_data_callback received temp: %d, hum: %d, press: %d. Pub address: 0x%02x\n", temperature, humidity, pressure, recv_dest);
 	// TODO forward to Raspberry Pi
 }
 
-void gas_data_callback(uint16_t ppm) {
-	printk("gas_data_callback received ppm: %d\n", ppm);
+void gas_data_callback(uint16_t ppm, uint16_t recv_dest) {
+	printk("gas_data_callback received ppm: %d. Pub address: 0x%02x\n", ppm, recv_dest);
 	// TODO forward to Raspberry Pi
 }
 

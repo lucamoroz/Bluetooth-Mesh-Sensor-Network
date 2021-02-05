@@ -3,8 +3,8 @@
 
 #include <bluetooth/mesh.h>
 
-typedef void (*thp_data_cb)(uint16_t temperature, uint16_t humidity, uint16_t pressure);
-typedef void (*gas_data_cb)(uint16_t ppm);
+typedef void (*thp_data_cb)(uint16_t temperature, uint16_t humidity, uint16_t pressure, uint16_t recv_dest);
+typedef void (*gas_data_cb)(uint16_t ppm, uint16_t recv_dest);
 
 thp_data_cb thp_callback = NULL;
 gas_data_cb gas_callback = NULL;
@@ -38,7 +38,7 @@ static void sensor_cli_status(struct bt_mesh_model *model, struct bt_mesh_msg_ct
 	    printk("Sensor value: %d\n", ppm);
 
         if (gas_callback != NULL) {
-            gas_callback(ppm);
+            gas_callback(ppm, ctx->recv_dst);
         } else {
             printk("Please set gas callback\n");
         }
@@ -60,7 +60,7 @@ static void sensor_cli_status(struct bt_mesh_model *model, struct bt_mesh_msg_ct
 	    printk("Sensor value: %d\n", pressure);
 
         if (thp_callback != NULL) {
-            thp_callback(temperature, humidity, pressure);
+            thp_callback(temperature, humidity, pressure, ctx->recv_dst);
         } else {
             printk("Please set thp callback\n");
         }
