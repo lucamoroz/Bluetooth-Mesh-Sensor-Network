@@ -31,6 +31,11 @@ Note: you can associate a publication address for e.g. each room of your buildin
 ## Erase
 To reset the devices (e.g. to perform provisioning again), run: `nrfjprog -e`
 
+## Test configuration
+To check if messages are sent successfull:
+1. Breath on the Sensor node to raise the CO2 level and trigger the sensor. The Sensor light should turn red until the CO2 level goes back to normal, it also sends a message (if correctly configured) that is received by the Proxy node, which will show a green light to notify the user that a Sensor node detected a high level of CO2.
+2. Press the Proxy node button to send Bluetooth Mesh messages, which will turn on/off the Sensor lights and send sensor_get requests. You will see debug messages on the RTT console.
+
 ## Debug
 ### Serial messages
 1. Install Segger JLink RTT: segger.com/products/debug-probes/j-link/technology/about-real-time-transfer/
