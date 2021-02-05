@@ -1,6 +1,23 @@
 # Setup
-1. Install VSCode and PlatformIO IDE: https://platformio.org/install/ide?install=vscode
-2. Install Zephyr (todo check if this is done by PlatformIO IDE automatically): https://docs.zephyrproject.org/latest/getting_started/installation_linux.html#installation-linux 
+1. Install VSCode
+2. Install Platformio IDE extension: https://platformio.org/install/ide?install=vscode 
+
+# Build
+Open the project (e.g. proxy) from PIO Home and press `ctrl+alt+b`
+
+Alternatively, from the project rood dir run `pio run --environment thingy_52`
+
+# Upload
+Open the project (e.g. proxy) from PIO Home and press `ctrl+alt+u`
+
+Alternatively, from the project rood dir run `pio run --target upload --environment thingy_52`
+
+# Debug
+## Serial messages
+1. Install Segger JLink RTT: segger.com/products/debug-probes/j-link/technology/about-real-time-transfer/
+2. Run: `JLinkRTTViewerExe`
+3. Select USB connection, NRF52832_XXAA as target device, SWD 4000 kHz, auto detection for RTT control block
+4. Connect and see printk() messages
 
 # Resources
 
@@ -19,10 +36,3 @@
 
 Videos:
 - Bluetooth mesh + zephyr intro: https://www.youtube.com/watch?v=9RMElr61SQI&ab_channel=TheLinuxFoundation
-
-# Debug
-## Serial messages
-1. Install JLink RTT: segger.com/products/debug-probes/j-link/technology/about-real-time-transfer/
-2. From terminal run: `JLinkRTTViewerExe`
-3. Select USB connection, NRF52832_XXAA as target devie, SWD 4000 kHz, auto detection for RTT control block
-4. Connect and see printk() messages
