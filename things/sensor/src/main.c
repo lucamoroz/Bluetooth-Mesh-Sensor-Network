@@ -102,6 +102,16 @@ static const struct bt_mesh_comp comp = {
 		.elem_count = ARRAY_SIZE(elements),
 };
 
+gas_sensor_trigger_callback gas_cb(uint16_t ppm) {
+	printk("gas_cb\n");
+	if (ppm > GAS_TRIGGER_THRESHOLD) {
+		printk("warning user: ppm above threshold\n");
+		thingy_led_on(255, 0, 0);
+	} else {
+		printk("removing user warning: ppm below threshold\n");
+		thingy_led_off();
+	}
+}
 
 static void bt_ready(int err) {
 	if (err)
@@ -151,7 +161,7 @@ void main(void) {
 		printk("Error starting thp sensor\n");
 	}
 
-	err = gas_sensor_setup(GAS_TRIGGER_THRESHOLD);
+	err = gas_sensor_setup(GAS_TRIGGER_THRESHOLD, &gas_cb);
 	if (err) {
 		printk("Error starting gas sensor\n");
 	}

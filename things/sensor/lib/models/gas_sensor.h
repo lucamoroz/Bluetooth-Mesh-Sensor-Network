@@ -4,7 +4,10 @@
 #include <bluetooth/mesh.h>
 #include "../sensors/ccs811.h"
 
+typedef void (*gas_sensor_trigger_callback)(uint16_t ppm);
+
 const struct device *ccs811;
+gas_sensor_trigger_callback gas_sensor_trigger_cb = NULL;
 
 #define BT_MESH_MODEL_OP_SENSOR_STATUS	BT_MESH_MODEL_OP_1(0x52)
 #define BT_MESH_MODEL_OP_SENSOR_GET	BT_MESH_MODEL_OP_2(0x82, 0x31)
@@ -50,7 +53,7 @@ static const struct bt_mesh_model_op gas_sens_srv_op[] = {
 
 #define GAS_SENSOR_MODEL BT_MESH_MODEL(BT_MESH_MODEL_ID_SENSOR_SRV, gas_sens_srv_op, &gas_sens_pub, NULL)
 
-void gas_sensor_publish_data(struct sensor_value *ppm_reading) {
+void gas_sensor_publish_data(uint16_t ppm) {
     int err;
     struct bt_mesh_model model = GAS_SENSOR_MODEL;
 
@@ -62,8 +65,6 @@ void gas_sensor_publish_data(struct sensor_value *ppm_reading) {
 		printk("No publish address associated with the gas sensor model! Add one with a configuration app like nrf mesh\n");
 		return;
 	}
-
-	uint16_t ppm = (int) sensor_value_to_double(ppm_reading);
 
     net_buf_simple_reset(msg);
 	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_SENSOR_STATUS);
@@ -79,8 +80,16 @@ void gas_sensor_publish_data(struct sensor_value *ppm_reading) {
 	}
 }
 
-int gas_sensor_setup(int32_t trigger_threshold) {
-	ccs811 = ccs811_setup(&gas_sensor_publish_data, trigger_threshold);
+void gas_sensor_trigger_handler(struct sensor_value *ppm_reading) {
+	uint16_t ppm = (uint16_t) sensor_value_to_double(ppm_reading);
+	gas_sensor_trigger_cb(ppm);
+	gas_sensor_publish_data(ppm);
+}
+
+int gas_sensor_setup(int32_t trigger_threshold, gas_sensor_trigger_callback cb) {
+	ccs811 = ccs811_setup(&gas_sensor_trigger_handler, trigger_threshold);
+	gas_sensor_trigger_cb = cb;
+
 	if (ccs811 == NULL) {
 		printk("Couldn't setup gas_sensor: error setting device\n");
 		return -1;
