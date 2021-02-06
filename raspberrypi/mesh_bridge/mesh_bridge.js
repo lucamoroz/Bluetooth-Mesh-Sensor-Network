@@ -1,6 +1,6 @@
 const noble = require('noble');
 const utils = require('./utils.js');
-const crypto = require('./crypto.js);
+const crypto = require('./crypto.js');
 const colors = require('colors');
 
 const MESH_SERVICE_UUID = '1828';
