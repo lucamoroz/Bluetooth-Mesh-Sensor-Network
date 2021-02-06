@@ -10,7 +10,7 @@
         network={
          ssid="my_network_ssid"
          psk="my_network_password"
-    } 
+        } 
     
 3. Find RPi IP address
 
@@ -40,8 +40,10 @@
 
 8. Change in library file `node_modules/noble/lib/hci-socket/hci.js` at line 6:
 
-        var BluetoothHciSocket = require('bluetooth-hci-socket');  
+        var BluetoothHciSocket = require('bluetooth-hci-socket');
+        
     into
+    
         var BluetoothHciSocket = require('@abandonware/bluetooth-hci-socket');
         
 9. Copy the Javascript files from the repository into the mesh_bridge folder
