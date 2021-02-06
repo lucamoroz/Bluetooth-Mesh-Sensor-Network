@@ -6,6 +6,8 @@ const colors = require('colors');
 const MESH_SERVICE_UUID = '1828';
 const MESH_CHARACTERISTIC_UUID = '2ade';
 
+var segmentation_buffer = null;
+
 //------------------------------------------
 // Mesh Network Encryption Key Generation
 //------------------------------------------
@@ -28,6 +30,7 @@ function initialise() {
   hex_encryption_key = k2_material.encryption_key;
   hex_privacy_key = k2_material.privacy_key;
   hex_nid = k2_material.NID;
+  console.log('Network ID: ' + hex_nid);
   network_id = crypto.k3(hex_netkey);
 }
 
@@ -67,7 +70,10 @@ function connectAndSetUp(peripheral) {
     );
   });
   
-  peripheral.on('disconnect', () => console.log('disconnected'));
+  peripheral.on('disconnect', () => {
+    console.log('Disconnected. Restarting scan...');
+    noble.startScanning([MESH_SERVICE_UUID]);}
+  );
 }
 
 //---------------------------------
@@ -83,6 +89,7 @@ function onServicesAndCharacteristicsDiscovered(error, services, characteristics
   meshCharacteristic.on('data', (data, isNotification) => {
     var octets = Uint8Array.from(data);
     console.log('Received: "' + utils.u8AToHexString(octets).toUpperCase() + '"');
+    logAndValidatePdu(octets);
   });
   
   // subscribe to be notified whenever the peripheral update the characteristic
@@ -98,7 +105,6 @@ function onServicesAndCharacteristicsDiscovered(error, services, characteristics
 //----------------------------------
 // Proxy PDU Decryption function
 //----------------------------------
-/*
 function logAndValidatePdu(octets) {
 
   // length validation
@@ -112,15 +118,37 @@ function logAndValidatePdu(octets) {
   // -----------------------------------------------------
   sar_msgtype = octets.subarray(0, 1);
   console.log("sar_msgtype="+sar_msgtype);
+  
+  // PDU segmentation
   sar = (sar_msgtype & 0xC0) >> 6;
   if (sar < 0 || sar > 3) {
     console.log(colors.red("SAR contains invalid value. 0-3 allowed. Ref Table 6.2"));
     return;
+  } else if (sar == 0) {
+    console.log("Complete message: " + utils)
+  } else if (sar == 1) {
+    segmentation_buffer = null;
+    segmentation_buffer = Buffer.from(octets);
+    console.log("First segment of message saved");
+    return;
+  } else if (sar == 2) {
+    concatenate(octets.subarray(1, octets.length));
+    console.log("Continuation of a message saved");
+    return;
+  } else if (sar == 3){
+    concatenate(octets.subarray(1, octets.length));
+    console.log("Last segment of a message saved");
+    octets = Uint8Array.from(segmentation_buffer);
   }
+
   
   msgtype = sar_msgtype & 0x3F;
   if (msgtype < 0 || msgtype > 3) {
     console.log(colors.red("Message Type contains invalid value. 0x00-0x03 allowed. Ref Table 6.3"));
+    return;
+  } else if (msgtype == 1) {
+    // mesh beacon received
+    extract_mesh_beacon(octets.subarray(1, octets.length));
     return;
   }
 
@@ -280,4 +308,36 @@ function logAndValidatePdu(octets) {
   console.log(colors.green("    NetMIC=" + hex_netmic));
   
 }
-*/
+
+// append a Uint8Array to the segmentation buffer
+function concatenate(octets) {
+  if (segmentation_buffer == null){
+    console.log("concatenation error");
+    return
+  }
+  var continuation = Buffer.from(octets);
+  var array = [segmentation_buffer,continuation];
+  segmentation_buffer = Buffer.concat(array);
+  console.log('New Concatenation');
+  return;
+}
+
+// extract and validate Mesh Beacon message
+function extract_mesh_beacon(octets) {
+  // check if beacon type is correct
+  var beacon_type = octets.subarray(0,1);
+  if (beacon_type != 1){
+    console.log("Error: beacon is not of Secure Network type");
+    return;
+  }
+
+  // check flags
+  // TODO update IV index
+
+  console.log("Network ID from beacon: " + utils.u8AToHexString(octets.subarray(2,10)));
+
+  // retrieve IV index
+  hex_iv_index = utils.u8AToHexString(octets.subarray(10,14));
+  console.log("IV Index: " + hex_iv_index);
+  return;
+}
