@@ -250,6 +250,9 @@ function logAndValidatePdu(octets) {
   seg_int = (parseInt(hex_pdu_seg_akf_aid, 16) & 0x80) >> 7;
   akf_int = (parseInt(hex_pdu_seg_akf_aid, 16) & 0x40) >> 6;
   aid_int = parseInt(hex_pdu_seg_akf_aid, 16) & 0x3F;
+  if (seg_int == 1) {
+    console.log('ERROR: segmented lower transport PDU')
+  }
 
   // upper transport: 3.6.2
 
@@ -334,6 +337,8 @@ function extract_mesh_beacon(octets) {
   // check flags
   // TODO update IV index
 
+  // check NID
+  // TODO verify the correctness of the statically configured network key
   console.log("Network ID from beacon: " + utils.u8AToHexString(octets.subarray(2,10)));
 
   // retrieve IV index
