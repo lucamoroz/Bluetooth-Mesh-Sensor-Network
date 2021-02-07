@@ -3,6 +3,14 @@ const utils = require('./utils.js');
 const crypto = require('./crypto.js');
 const colors = require('colors');
 
+let config;
+try {
+  config = require('./config');
+} catch (e) {
+  console.log("Did you set up the keys?");
+  process.exit(1);
+}
+
 const MESH_SERVICE_UUID = '1828';
 const MESH_CHARACTERISTIC_UUID = '2ade';
 
@@ -13,9 +21,9 @@ var segmentation_buffer = null;
 //------------------------------------------
 
 // provision data statically configured
-var hex_iv_index = "12345677";
-var hex_netkey = "644B6AD060C9088ADE0F54EF68930F16";
-var hex_appkey = "915C42B6C4D10AE7CA224776D57D249F";
+let hex_iv_index = config.hex_iv_index;
+let hex_netkey = config.hex_netkey;
+let hex_appkey = config.hex_appkey;
 
 hex_encryption_key = ""; // derived from NetKey using k2
 hex_privacy_key = "";    // derived from NetKey using k2
@@ -69,7 +77,7 @@ function connectAndSetUp(peripheral) {
         onServicesAndCharacteristicsDiscovered
     );
   });
-  
+
   peripheral.on('disconnect', () => {
     console.log('Disconnected. Restarting scan...');
     noble.startScanning([MESH_SERVICE_UUID]);}
@@ -91,7 +99,7 @@ function onServicesAndCharacteristicsDiscovered(error, services, characteristics
     console.log('Received: "' + utils.u8AToHexString(octets).toUpperCase() + '"');
     logAndValidatePdu(octets);
   });
-  
+
   // subscribe to be notified whenever the peripheral update the characteristic
   meshCharacteristic.subscribe(error => {
     if (error) {
@@ -118,7 +126,7 @@ function logAndValidatePdu(octets) {
   // -----------------------------------------------------
   sar_msgtype = octets.subarray(0, 1);
   console.log("sar_msgtype="+sar_msgtype);
-  
+
   // PDU segmentation
   sar = (sar_msgtype & 0xC0) >> 6;
   if (sar < 0 || sar > 3) {
@@ -141,7 +149,7 @@ function logAndValidatePdu(octets) {
     octets = Uint8Array.from(segmentation_buffer);
   }
 
-  
+
   msgtype = sar_msgtype & 0x3F;
   if (msgtype < 0 || msgtype > 3) {
     console.log(colors.red("Message Type contains invalid value. 0x00-0x03 allowed. Ref Table 6.3"));
@@ -309,7 +317,7 @@ function logAndValidatePdu(octets) {
   console.log(colors.green("          params=" + hex_params));
   console.log(colors.green("        TransMIC=" + hex_transmic));
   console.log(colors.green("    NetMIC=" + hex_netmic));
-  
+
 }
 
 // append a Uint8Array to the segmentation buffer
