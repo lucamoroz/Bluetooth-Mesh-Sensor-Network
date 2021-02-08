@@ -9,3 +9,9 @@ exports.mqtt_token = "w7SohHdkRf2ZVvKv";
 
 // Proxy IDs
 exports.proxy_ids = ['d1e174cea07c'];
+
+// Mapping addresses to names
+// Format: <mesh address>: <human readable name>
+exports.address_map = {
+  '0003': 'living_room'
+}
