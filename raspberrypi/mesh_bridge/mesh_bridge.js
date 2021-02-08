@@ -367,6 +367,7 @@ function logAndValidatePdu(octets) {
   console.log(colors.green("        TransMIC=" + hex_transmic));
   console.log(colors.green("    NetMIC=" + hex_netmic));
 
+  console.log(decode_message(hex_params));
 }
 
 // append a Uint8Array to the segmentation buffer
@@ -402,4 +403,55 @@ function extract_mesh_beacon(octets) {
   hex_iv_index = utils.u8AToHexString(octets.subarray(10,14));
   console.log("IV Index: " + hex_iv_index);
   return;
+}
+
+function read_short_le(number) {
+  return (
+    parseInt(number.substring(0, 2), 16) +
+    (parseInt(number.substring(2, 4), 16) << 8)
+  );
+}
+
+function decode_message(message) {
+  message = message.toLowerCase();
+
+  switch (message.substring(0, 4)) {
+    case "102a":
+      return decode_thp(message);
+
+    case "132a":
+      return decode_gas(message);
+
+    default:
+      console.log("Error: unknown message");
+      return {}
+  }
+}
+
+function decode_thp(message) {
+  if (
+    message.substring(0, 4) !== "102a"
+    || message.substring(8, 12) !== "112a"
+    || message.substring(16, 20) !== "122a"
+  ) {
+    console.log("Error: malformed thp message");
+    return {};
+  }
+
+  return {
+    'temperature': read_short_le(message.substring(4, 8)) / 100,
+    'humidity': read_short_le(message.substring(12, 16)) / 100,
+    'pressure': read_short_le(message.substring(20, 24)) / 100
+  }
+}
+
+function decode_gas(message) {
+  if (message.substring(0, 4) !== "132a") {
+    console.log("Error: malformed gas message");
+    return {};
+  }
+
+  return {
+    'co2_ppm': read_short_le(message.substr(4, 8)),
+  }
 }
