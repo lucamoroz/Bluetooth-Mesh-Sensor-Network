@@ -18,6 +18,7 @@ const MESH_CHARACTERISTIC_UUID = '2ade';
 
 let segmentation_buffer = null;
 let pdu_segmentation_buffer = [];
+let latest_window = Array(0x400).fill(-1); // Window for 1024 elements
 
 //------------------------------------------
 // Mesh Network Encryption Key Generation
@@ -269,13 +270,11 @@ function logAndValidatePdu(octets) {
 
   let transmic_len;
   let aszmic;
-  let lower_seq_auth;
 
   if (seg_int == 0) {
     pdu_segmentation_buffer = [lower_transport_pdu.substring(2, lower_transport_pdu.length)];
     aszmic = "00";
     transmic_len = 8; // 32 bits
-    lower_seq_auth = hex_pdu_seq;
   } else { // 3.5.2.2 Segmented Access message
     let hdr = parseInt(lower_transport_pdu.substring(2, 8), 16);
 
@@ -290,17 +289,28 @@ function logAndValidatePdu(octets) {
     pdu_segmentation_buffer[idx] = lower_transport_pdu.substring(8, lower_transport_pdu.length);
 
     // Here the magic happens. We assemble the seq_auth according to 3.5.3.1
-    lower_seq_auth = (
-      ((parseInt(hex_pdu_seq.substring(0, 6), 16) >> 14) << 14) +
-      ((hdr >> 10) & 0x1FFF)
+    hex_pdu_seq = (
+      (parseInt(hex_pdu_seq.substring(0, 6), 16) & 0xFFE000) + // Upper 11 bits
+      ((hdr >> 10) & 0x1FFF) // Lower 13 bits
     ).toString(16).padStart(6, "0");
-
-    console.log("lower_seq_auth=" + lower_seq_auth);
 
     if (tot !== idx) {
       return;
     }
   }
+
+  // Check packet duplication
+  let seq = parseInt(hex_pdu_seq, 16);
+  if (
+    latest_window[seq & 0x400] >= seq && // Number in window is in the "past"
+    latest_window[seq & 0x400] - seq < 0x1000 // And not too far in the past (prevent loopback)
+  ) {
+    console.log("Duplicate packet " + hex_pdu_seq + ", ignoring")
+    return;
+  }
+
+  // Add to window
+  latest_window[seq & 0x400] = seq;
 
   // upper transport: 3.6.2
   hex_enc_access_payload_transmic = pdu_segmentation_buffer.join("");
@@ -322,7 +332,7 @@ function logAndValidatePdu(octets) {
 
   // access payload: 3.7.3
   // derive Application Nonce (3.8.5.2)
-  hex_app_nonce = "01" + aszmic + lower_seq_auth + hex_pdu_src + hex_pdu_dst + hex_iv_index;
+  hex_app_nonce = "01" + aszmic + hex_pdu_seq + hex_pdu_src + hex_pdu_dst + hex_iv_index;
   console.log("application nonce=" + hex_app_nonce);
 
   console.log("decrypting and verifying access layer: " + hex_enc_access_payload + hex_transmic + " key: " + hex_appkey + " nonce: " + hex_app_nonce);
