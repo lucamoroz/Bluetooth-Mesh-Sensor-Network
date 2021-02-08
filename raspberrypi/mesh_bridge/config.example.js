@@ -6,3 +6,6 @@ exports.hex_appkey = "915C42B6C4D10AE7CA224776D57D249F";
 // MQTT publishing data
 exports.mqtt_url = "mqtts://iot.wussler.it";
 exports.mqtt_token = "w7SohHdkRf2ZVvKv";
+
+// Proxy IDs
+exports.proxy_ids = ['d1e174cea07c'];

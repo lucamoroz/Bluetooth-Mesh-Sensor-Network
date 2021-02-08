@@ -58,11 +58,16 @@ noble.on('stateChange', state => {
 });
 
 noble.on('discover', peripheral => {
-    // connect to the first peripheral that is scanned
-    noble.stopScanning();
-    const name = peripheral.advertisement.localName;
-    console.log(`Connecting to '${name}' ${peripheral.id}`);
-    connectAndSetUp(peripheral);
+  const name = peripheral.advertisement.localName;
+  if (!config.proxy_ids.includes(peripheral.id)) {
+    console.log(`Found '${name}' ${peripheral.id} - not whitelisted, skipping`);
+    return;
+  }
+
+  // connect to the first whitelisted peripheral that is scanned
+  noble.stopScanning();
+  console.log(`Connecting to '${name}' ${peripheral.id}`);
+  connectAndSetUp(peripheral);
 });
 
 function connectAndSetUp(peripheral) {
