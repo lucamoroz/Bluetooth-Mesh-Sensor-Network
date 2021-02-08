@@ -38,7 +38,7 @@ function init() {
 
 	The most significant octet of key corresponds to key[0], the most significant
   octet of plaintextData corresponds to in[0] and the most significant octet of
-  encryptedData corresponds to out[0] using the notation specified in FIPS-1971	
+  encryptedData corresponds to out[0] using the notation specified in FIPS-1971
 
 	hex in, hex out
 	*/
@@ -65,14 +65,14 @@ function k2(N, P) {
 	// NB the parse function converts a byte array into a CryptoJS WordArray
 	T = getAesCmac(k2_salt, N);
 
-	//		T0 = empty string (zero length) 
+	//		T0 = empty string (zero length)
 	T0 = "";
 
-	//		T1 = AES-CMACt (T0 || P || 0x01) 
+	//		T1 = AES-CMACt (T0 || P || 0x01)
 	M1 = T0 + P.toString() + "01";
 	T1 = getAesCmac(T, M1);
 
-	//		T2 = AES-CMACt (T1 || P || 0x02) 
+	//		T2 = AES-CMACt (T1 || P || 0x02)
 	M2 = T1 + P.toString() + "02";
 	T2 = getAesCmac(T, M2);
 
@@ -135,7 +135,7 @@ function privacyRandom(enc_dst, enc_transport_pdu, netmic) {
 	}
 }
 
-function decryptAndVerify(hex_key, hex_cipher, hex_nonce) {
+function decryptAndVerify(hex_key, hex_cipher, hex_nonce, tag_size) {
 	dec_ver_result = {
 		hex_decrypted: "",
 		status: 0,
@@ -143,7 +143,7 @@ function decryptAndVerify(hex_key, hex_cipher, hex_nonce) {
 	}
 	try {
 		var adata = new Uint8Array([ ]);
-		dec = asmCrypto.AES_CCM.decrypt( utils.hexToU8A(hex_cipher), utils.hexToU8A(hex_key), utils.hexToU8A(hex_nonce), adata, 4 );
+		dec = asmCrypto.AES_CCM.decrypt( utils.hexToU8A(hex_cipher), utils.hexToU8A(hex_key), utils.hexToU8A(hex_nonce), adata, tag_size);
 		hex_dec = utils.u8AToHexString(dec);
 		dec_ver_result.hex_decrypted = hex_dec;
 	} catch (err) {
