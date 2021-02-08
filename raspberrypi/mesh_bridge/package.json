@@ -1,0 +1,19 @@
+{
+  "name": "mesh_bridge",
+  "version": "1.0.0",
+  "description": "",
+  "main": "mesh_bridge.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@abandonware/bluetooth-hci-socket": "^0.5.3-7",
+    "big-integer": "^1.6.48",
+    "colors": "^1.4.0",
+    "noble": "^1.9.1",
+    "node-aes-cmac": "^0.1.1"
+  }
+}
