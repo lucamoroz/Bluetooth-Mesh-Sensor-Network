@@ -13,6 +13,7 @@
     "@abandonware/bluetooth-hci-socket": "^0.5.3-7",
     "big-integer": "^1.6.48",
     "colors": "^1.4.0",
+    "mqtt": "^4.2.6",
     "noble": "^1.9.1",
     "node-aes-cmac": "^0.1.1"
   }

@@ -1,7 +1,9 @@
 const noble = require('noble');
-const utils = require('./utils.js');
-const crypto = require('./crypto.js');
 const colors = require('colors');
+
+const crypto = require('./crypto.js');
+const mqtt = require('./mqtt.js');
+const utils = require('./utils.js');
 
 let config;
 try {
@@ -367,7 +369,9 @@ function logAndValidatePdu(octets) {
   console.log(colors.green("        TransMIC=" + hex_transmic));
   console.log(colors.green("    NetMIC=" + hex_netmic));
 
-  console.log(decode_message(hex_params));
+  let decoded = decode_message(hex_params);
+  console.log(decoded);
+  mqtt.send_data(decoded);
 }
 
 // append a Uint8Array to the segmentation buffer
