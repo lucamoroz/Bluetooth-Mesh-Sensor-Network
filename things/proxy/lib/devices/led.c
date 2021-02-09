@@ -20,6 +20,17 @@ void led_off() {
 	gpio_pin_set(led_ctrlr, LED_B, 1);
 }
 
+void led_pulse(uint8_t times, uint32_t on_ms, uint32_t off_ms) {
+	for (int i=0; i<times; i++) {
+		led_on(255, 255, 255);
+		k_msleep(on_ms);
+		led_off();
+		if (i < times-1) {
+			k_msleep(off_ms);
+		}
+	}	
+}
+
 void led_setup() {
     if (led_ctrlr != NULL) {
         printk("Led already configured!\n");
