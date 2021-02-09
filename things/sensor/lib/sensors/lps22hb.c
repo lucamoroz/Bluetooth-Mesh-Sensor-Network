@@ -1,4 +1,5 @@
 #include "lps22hb.h"
+#include "stdio.h"
 
 int lps22hb_handler(const struct device *dev, struct sensor_value *pressure)
 {

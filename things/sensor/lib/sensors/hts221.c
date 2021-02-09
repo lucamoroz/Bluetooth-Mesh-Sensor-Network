@@ -1,4 +1,5 @@
 #include "hts221.h"
+#include "stdio.h"
 
 int hts221_handler(const struct device *dev, struct sensor_value *temp, struct sensor_value *hum)
 {
