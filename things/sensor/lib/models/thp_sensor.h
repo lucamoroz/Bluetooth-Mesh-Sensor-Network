@@ -37,7 +37,7 @@ int thp_sensor_update_cb(struct bt_mesh_model *mod) {
 	net_buf_simple_add_le16(msg, ID_PRESSURE);
 	net_buf_simple_add_le16(msg, (int16_t) (pressure * 100));
 
-	printf("\nPublishing sensor data: temp %.2f, hum: %.2f, press: %.2f\n", temperature, humidity, pressure);
+	printk("Publishing thp sensor data\n");
 	
 	return 0;
 }
@@ -70,7 +70,7 @@ static void sensor_thp_status(struct bt_mesh_model *model, struct bt_mesh_msg_ct
 	net_buf_simple_add_le16(msg, ID_PRESSURE);
 	net_buf_simple_add_le16(msg, (int16_t) (pressure * 100));
 
-	printf("\nPublishing sensor data: temp %.2f, hum: %.2f, press: %.2f\n", temperature, humidity, pressure);
+	printk("Publishing thp sensor data\n");
 	ret = bt_mesh_model_publish(model);
 	if (ret) {
 		printk("Error publishing sensor status: %d\n", ret);
@@ -117,7 +117,7 @@ static void thp_sensor_publish_data() {
 	net_buf_simple_add_le16(msg, ID_PRESSURE);
 	net_buf_simple_add_le16(msg, (int16_t) (pressure * 100));
 
-	printf("\nPublishing sensor data: temp %.2f, hum: %.2f, press: %.2f\n", temperature, humidity, pressure);
+	printk("Publishing thp sensor data\n");
 	err = bt_mesh_model_publish(&model);
 	if (err) {
 		printk("bt_mesh_publish error: %d\n", err);

@@ -131,6 +131,7 @@ static struct bt_mesh_model sig_models[] = {
 	BT_MESH_MODEL_HEALTH_SRV(&health_srv, &health_pub),
 	GEN_ONOFF_CLI_MODEL,
 	SENSOR_CLIENT_MODEL,
+	SENSOR_SERVER_MODEL,
 };
 
 // define the element(s) which contain the previously defined models

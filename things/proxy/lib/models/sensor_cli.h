@@ -3,6 +3,7 @@
 
 #include <bluetooth/mesh.h>
 #include <stdio.h>
+#include <sensor_server.h>
 
 typedef void (*thp_data_cb)(float temperature, float humidity, float pressure, uint16_t recv_dest);
 typedef void (*gas_data_cb)(uint16_t ppm, uint16_t recv_dest);
@@ -29,7 +30,6 @@ void sensor_cli_set_gas_callback(gas_data_cb cb) {
 
 BT_MESH_MODEL_PUB_DEFINE(sensor_cli_pub, NULL, 0); // Property ID not supported
 
-
 static void sensor_cli_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
 	printk("sensor_cli_status - buf len:%d\n",  buf->len);
     if (!(buf->len == 12 || buf->len == 4)) {
@@ -39,8 +39,7 @@ static void sensor_cli_status(struct bt_mesh_model *model, struct bt_mesh_msg_ct
     
     NET_BUF_SIMPLE_DEFINE(clone, buf->len);
     net_buf_simple_clone(buf, &clone);
-    replay_to_all(model, ctx, &clone);
-    //sensor_srv_pub_to_all(&clone);
+    sensor_srv_pub_to_all(&clone, ctx->recv_dst);
 
     if (buf->len == 4) {
         uint16_t gas_sensor_id = net_buf_simple_pull_le16(buf);
@@ -110,50 +109,6 @@ void sensor_cli_get(struct bt_mesh_model *model) {
 	err = bt_mesh_model_publish(model);
 	if (err) {
 		printk("bt_mesh_model_publish err: %d\n", err);
-	}
-}
-
-
-#define BT_MESH_MODEL_OP_SENSOR_STATUS	BT_MESH_MODEL_OP_1(0x52)
-
-void replay_to_all(struct bt_mesh_model *mdl, struct bt_mesh_msg_ctx *original_ctx, struct net_buf_simple *buf) {
-    printk("reply_to_all - buf len: %d, original pub addr: 0x%02x\n", buf->len, original_ctx->recv_dst);
-    
-    if (!(buf->len == 12 || buf->len == 4)) {
-        printk("ignoring message replay: unrecognized len\n");
-        return;
-    }
-    
-    NET_BUF_SIMPLE_DEFINE(msg, buf->len+5+2);
-    bt_mesh_model_msg_init(&msg, BT_MESH_MODEL_OP_SENSOR_STATUS);
-
-    if (buf->len == 4) {
-        net_buf_simple_add_le16(&msg, net_buf_simple_pull_le16(buf));
-        net_buf_simple_add_le16(&msg, net_buf_simple_pull_le16(buf));
-    } else if (buf->len == 12) {
-        net_buf_simple_add_le16(&msg, net_buf_simple_pull_le16(buf));
-        net_buf_simple_add_le16(&msg, net_buf_simple_pull_le16(buf));
-        net_buf_simple_add_le16(&msg, net_buf_simple_pull_le16(buf));
-        net_buf_simple_add_le16(&msg, net_buf_simple_pull_le16(buf));
-        net_buf_simple_add_le16(&msg, net_buf_simple_pull_le16(buf));
-        net_buf_simple_add_le16(&msg, net_buf_simple_pull_le16(buf));
-    } else {
-        return;
-    }
-
-    // Append original publication address at the end of the msg
-    net_buf_simple_add_le16(&msg, original_ctx->recv_dst);
-
-    struct bt_mesh_msg_ctx ctx = {
-			.net_idx = original_ctx->net_idx,
-			.app_idx = original_ctx->app_idx,
-			.addr = BT_MESH_ADDR_ALL_NODES,
-			.send_ttl = 2,
-	};
-
-	printk("replaying sensor status message\n");
-	if (bt_mesh_model_send(mdl, &ctx, &msg, NULL, NULL)) {
-		printk("Unable to send status message\n");
 	}
 }
 
