@@ -9,27 +9,10 @@
 #include <../lib/models/sensor_cli.h>
 #include <../lib/models/gen_onoff_cli.h>
 #include <../lib/devices/led.h>
+#include <../lib/devices/button.h>
 
-// GPIO for the buttons
-#define SW0_NODE	DT_ALIAS(sw0)
-
-#if DT_NODE_HAS_STATUS(SW0_NODE, okay)
-#define SW0_GPIO_LABEL	DT_GPIO_LABEL(SW0_NODE, gpios)
-#define SW0_GPIO_PIN	DT_GPIO_PIN(SW0_NODE, gpios)
-#define SW0_GPIO_FLAGS	(GPIO_INPUT | DT_GPIO_FLAGS(SW0_NODE, gpios) | GPIO_INT_EDGE)
-#else
-#error "Unsupported board: sw0 devicetree alias is not defined"
-#endif
-
-#define BUTTON_DEBOUNCE_DELAY_MS 250
 
 #define GAS_TRIGGER_THRESHOLD 800
-
-// for debouncing the button
-static uint32_t btn_time = 0;
-static uint32_t btn_last_time = 0;
-
-static struct gpio_callback button_cb_data;
 
 int op_id = 0;
 
@@ -142,73 +125,18 @@ void gas_data_callback(uint16_t ppm, uint16_t recv_dest) {
 	}
 }
 
-
-// -------------------------------------------------------------------------------------------------------
-// Buttons
-// -------
-bool debounce() {
-	bool ignore = false;
-	btn_time = k_uptime_get_32();
-	if (btn_time < (btn_last_time + BUTTON_DEBOUNCE_DELAY_MS)) {
-		ignore = true;
-	} else {
-		ignore = false;
+void button_callback() {
+	if (op_id % 4 == 0) {
+		gen_onoff_set_unack(0);
+	} else if (op_id % 4 == 1) {
+		gen_onoff_set_unack(1);
+	} else if (op_id % 4 == 2) {
+		gen_onoff_get(&sig_models[2]);
+	} else if (op_id % 4 == 3) {
+		sensor_cli_get(&sig_models[3]);
 	}
-	btn_last_time = btn_time;
-	return ignore;
-}
-
-void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins) {	
-	if (!debounce()) {
-		printk("Button pressed at %" PRIu32 "\n", k_cycle_get_32());
 		
-		if (op_id % 4 == 0) {
-			gen_onoff_set_unack(0);
-		} else if (op_id % 4 == 1) {
-			gen_onoff_set_unack(1);
-		} else if (op_id % 4 == 2) {
-			gen_onoff_get(&sig_models[2]);
-		} else if (op_id % 4 == 3) {
-			sensor_cli_get(&sig_models[3]);
-		}
-		
-		op_id++;
-	}
-}
-
-void configure_buttons(void)
-{
-	int ret;
-	printk("configure_buttons\n");
-
-	const struct device *button;
-
-	button = device_get_binding(SW0_GPIO_LABEL);
-	if (button == NULL) {
-		printk("Error: didn't find %s device\n", SW0_GPIO_LABEL);
-		return;
-	}
-
-	ret = gpio_pin_configure(button, SW0_GPIO_PIN, SW0_GPIO_FLAGS);
-	if (ret != 0) {
-		printk("Error %d: failed to configure %s pin %d\n",
-		       ret, SW0_GPIO_LABEL, SW0_GPIO_PIN);
-		return;
-	}
-
-	ret = gpio_pin_interrupt_configure(button,
-					   SW0_GPIO_PIN,
-					   GPIO_INT_EDGE_TO_ACTIVE);
-	if (ret != 0) {
-		printk("Error %d: failed to configure interrupt on %s pin %d\n",
-			ret, SW0_GPIO_LABEL, SW0_GPIO_PIN);
-		return;
-	}
-
-	gpio_init_callback(&button_cb_data, button_pressed, BIT(SW0_GPIO_PIN));
-	gpio_add_callback(button, &button_cb_data);
-	printk("Set up button at %s pin %d\n", SW0_GPIO_LABEL, SW0_GPIO_PIN);
-
+	op_id++;
 }
 
 static void bt_ready(int err) {
@@ -243,12 +171,10 @@ static void bt_ready(int err) {
 
 
 void main(void) {
+	printk("\n\n----- THINGY 52 PROXY NODE -----\n\n");
 	int err;
-	printk("thingy switch node\n");
 
-	onoff_tid = 0;
-
-	configure_buttons();
+	button_setup(&button_callback);
 	led_setup();
 
 	err = bt_enable(bt_ready);

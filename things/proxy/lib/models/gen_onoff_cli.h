@@ -11,7 +11,7 @@
 BT_MESH_MODEL_PUB_DEFINE(gen_onoff_cli, NULL, 2); // 2 = 1+1 = sizeof(on_of_off) + sizeof(tid)
 
 uint8_t onoff[] = {0,1};
-static uint8_t onoff_tid;
+static uint8_t onoff_tid = 0;
 
 static void generic_onoff_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
 	printk("generic_onoff_status\n");
