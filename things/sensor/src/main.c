@@ -7,6 +7,7 @@
 #include <../lib/models/gas_sensor.h>
 #include <../lib/models/generic_onoff.h>
 #include <../lib/devices/led.h>
+#include <../lib/devices/button.h>
 
 #define GAS_TRIGGER_THRESHOLD 800
 
@@ -114,6 +115,14 @@ void gas_cb(uint16_t ppm) {
 	}
 }
 
+void button_callback() {
+	printk("turning on...\n");
+	led_on(0, 255, 0);
+	k_msleep(3000);
+	printk("turning off...\n");
+	led_off();
+}
+
 static void bt_ready(int err) {
 	if (err)
 	{
@@ -148,7 +157,9 @@ static void bt_ready(int err) {
 }
 
 void main(void) {
-	printk("thingy sensor node\n");
+	printk("\n\n----- THINGY 52 SENSOR NODE -----\n\n");
+	
+	button_setup(&button_callback);
 
 	int err = bt_enable(bt_ready);
 	if (err) {
