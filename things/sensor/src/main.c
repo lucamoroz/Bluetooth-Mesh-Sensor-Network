@@ -38,7 +38,7 @@ static int provisioning_output_pin(bt_mesh_output_action_t action, uint32_t numb
 }
 
 static void provisioning_complete(uint16_t net_idx, uint16_t addr) {
-    printk("Provisioning completed\n");
+    printk("Provisioning completed: address: %d\n", addr);
 }
 
 static void provisioning_reset(void) {
@@ -116,11 +116,12 @@ void gas_cb(uint16_t ppm) {
 }
 
 void button_callback() {
-	printk("turning on...\n");
-	led_on(0, 255, 0);
-	k_msleep(3000);
-	printk("turning off...\n");
-	led_off();
+	// Display first element address, which is set during provisioning. 
+	// The address of the second element is always the address of the first element plus one, 
+	// therefore only the first is shown with led_pulse.
+	printk("First element address: %d, second element address: %d\n", elements[0].addr, elements[1].addr);
+	k_msleep(200);
+	led_pulse(elements[0].addr, 500, 200);
 }
 
 static void bt_ready(int err) {
