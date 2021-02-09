@@ -8,6 +8,7 @@
 
 #include <../lib/models/sensor_cli.h>
 #include <../lib/models/gen_onoff_cli.h>
+#include <../lib/devices/led.h>
 
 // GPIO for the buttons
 #define SW0_NODE	DT_ALIAS(sw0)
@@ -30,36 +31,14 @@ static uint32_t btn_last_time = 0;
 
 static struct gpio_callback button_cb_data;
 
-// GPIO for LED 0
-const struct device *led;
 int op_id = 0;
-
-#define LED0_NODE	DT_ALIAS(led0)
-
-#if DT_NODE_HAS_STATUS(LED0_NODE, okay) && DT_NODE_HAS_PROP(LED0_NODE, gpios)
-#define LED0_GPIO_LABEL	DT_GPIO_LABEL(LED0_NODE, gpios)
-#define LED0_GPIO_PIN	DT_GPIO_PIN(LED0_NODE, gpios)
-#define LED0_GPIO_FLAGS	(GPIO_OUTPUT | DT_GPIO_FLAGS(LED0_NODE, gpios))
-#else
-#error "Unsupported board: led0 devicetree alias is not defined"
-#endif
 
 static const uint8_t dev_uuid[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x00 };
 
 
-void led_on(void) {
-	printk("turning led on\n");
-	gpio_pin_set(led, LED0_GPIO_PIN, 1);
-}
-
-void led_off(void) {
-	printk("turning led off\n");
-	gpio_pin_set(led, LED0_GPIO_PIN, 0);
-}
-
 static void attention_on(struct bt_mesh_model *model) {
 	printk("attention_on\n");
-	led_on();
+	led_on(0, 0, 255);
 }
 
 static void attention_off(struct bt_mesh_model *model) {
@@ -157,45 +136,16 @@ void gas_data_callback(uint16_t ppm, uint16_t recv_dest) {
 	printf("\n\ngas_data_callback received ppm: %d. Pub address: 0x%02x\n\n", ppm, recv_dest);
 	
 	if (ppm > GAS_TRIGGER_THRESHOLD) {
-		led_on();
+		led_on(0, 255, 0);
 	} else {
 		led_off();
 	}
-	
-	// TODO forward to Raspberry Pi
 }
 
-
-// -------------------------------------------------------------------------------------------------------
-// LED
-// -------
-
-void initialize_led(void) {
-	printk("initializeLED\n");
-	int ret;
-
-	led = device_get_binding(LED0_GPIO_LABEL);
-
-	if (led == NULL) {
-		printk("Didn't find LED device %s\n", LED0_GPIO_LABEL);
-		return;
-	}
-
-	ret = gpio_pin_configure(led, LED0_GPIO_PIN, GPIO_OUTPUT_ACTIVE | LED0_GPIO_FLAGS);
-	if (ret != 0) {
-		printk("Error %d: failed to configure LED device %s pin %d\n",
-		       ret, LED0_GPIO_LABEL, LED0_GPIO_PIN);
-		return;
-	}
-
-	printk("Set up LED at %s pin %d\n", LED0_GPIO_LABEL, LED0_GPIO_PIN);
-	led_off();
-}
 
 // -------------------------------------------------------------------------------------------------------
 // Buttons
 // -------
-
 bool debounce() {
 	bool ignore = false;
 	btn_time = k_uptime_get_32();
@@ -299,12 +249,10 @@ void main(void) {
 	onoff_tid = 0;
 
 	configure_buttons();
+	led_setup();
 
-	initialize_led();
-	
 	err = bt_enable(bt_ready);
-	if (err)
-	{
+	if (err) {
 		printk("bt_enable failed with err %d\n", err);
 	}
 	
