@@ -126,13 +126,11 @@ void gas_data_callback(uint16_t ppm, uint16_t recv_dest) {
 }
 
 void button_callback() {
-	if (op_id % 4 == 0) {
+	if (op_id % 3 == 0) {
 		gen_onoff_set_unack(0);
-	} else if (op_id % 4 == 1) {
+	} else if (op_id % 3 == 1) {
 		gen_onoff_set_unack(1);
-	} else if (op_id % 4 == 2) {
-		gen_onoff_get(&sig_models[2]);
-	} else if (op_id % 4 == 3) {
+	} else if (op_id % 3 == 2) {
 		sensor_cli_get(&sig_models[3]);
 	}
 		
@@ -166,7 +164,6 @@ static void bt_ready(int err) {
 		printk("Node has not been provisioned: beaconing\n");
 		bt_mesh_prov_enable(BT_MESH_PROV_ADV | BT_MESH_PROV_GATT); // provision using either gatt or advertising bearer
 	}
-	
 }
 
 
