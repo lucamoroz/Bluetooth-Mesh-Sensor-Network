@@ -6,6 +6,7 @@
 #include <../lib/models/thp_sensor.h>
 #include <../lib/models/gas_sensor.h>
 #include <../lib/models/generic_onoff.h>
+#include <../lib/devices/led.h>
 
 #define GAS_TRIGGER_THRESHOLD 800
 
@@ -17,12 +18,12 @@ static const uint8_t dev_uuid[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 
 // provisioning callback functions
 static void attention_on(struct bt_mesh_model *model) {
 	printk("attention_on()\n");
-	thingy_led_on(255,0,0);
+	led_on(255,0,0);
 }
 
 static void attention_off(struct bt_mesh_model *model) {
 	printk("attention_off()\n");
-	thingy_led_off();
+	led_off();
 }
 
 static const struct bt_mesh_health_srv_cb health_srv_cb = {
@@ -102,14 +103,14 @@ static const struct bt_mesh_comp comp = {
 		.elem_count = ARRAY_SIZE(elements),
 };
 
-gas_sensor_trigger_callback gas_cb(uint16_t ppm) {
+void gas_cb(uint16_t ppm) {
 	printk("gas_cb\n");
 	if (ppm > GAS_TRIGGER_THRESHOLD) {
 		printk("warning user: ppm above threshold\n");
-		thingy_led_on(255, 0, 0);
+		led_on(255, 0, 0);
 	} else {
 		printk("removing user warning: ppm below threshold\n");
-		thingy_led_off();
+		led_off();
 	}
 }
 
@@ -148,8 +149,6 @@ static void bt_ready(int err) {
 
 void main(void) {
 	printk("thingy sensor node\n");
-
-	configure_thingy_led_controller();
 
 	int err = bt_enable(bt_ready);
 	if (err) {
