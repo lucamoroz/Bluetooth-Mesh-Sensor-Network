@@ -97,4 +97,31 @@ int gas_sensor_setup(int32_t trigger_threshold, gas_sensor_trigger_callback cb) 
 	return 0;
 }
 
+int gas_sensor_autoconf(uint16_t root_addr, uint16_t elem_addr) {
+	int err;
+	
+	err = bt_mesh_cfg_mod_app_bind(0, root_addr, elem_addr, 0, BT_MESH_MODEL_ID_SENSOR_SRV, NULL);
+	if (err) {
+		printk("Error binding default app key to gas sensor model\n");
+		return err;
+	}
+
+	struct bt_mesh_cfg_mod_pub pub_gas = {
+		.addr = 0xFFFF,
+		.app_idx = 0,
+		.ttl = 7,
+		.period = 0,
+		.transmit = BT_MESH_TRANSMIT(0, 0),
+	};
+
+	err = bt_mesh_cfg_mod_pub_set(0, root_addr, elem_addr, BT_MESH_MODEL_ID_SENSOR_SRV, &pub_gas, NULL);
+	if (err) {
+		printk("Error setting default publish config to gas sensor model\n");
+		return err;
+	}
+
+	printk("Successfully configured gas sensor model\n");
+	return 0;
+}
+
 #endif //GAS_SENSOR_H
