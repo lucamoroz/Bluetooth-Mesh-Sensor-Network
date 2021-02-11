@@ -8,58 +8,25 @@
 
 #include <../lib/models/sensor_cli.h>
 #include <../lib/models/gen_onoff_cli.h>
+#include <../lib/devices/led.h>
+#include <../lib/devices/button.h>
 
-// GPIO for the buttons
-#define SW0_NODE	DT_ALIAS(sw0)
-
-#if DT_NODE_HAS_STATUS(SW0_NODE, okay)
-#define SW0_GPIO_LABEL	DT_GPIO_LABEL(SW0_NODE, gpios)
-#define SW0_GPIO_PIN	DT_GPIO_PIN(SW0_NODE, gpios)
-#define SW0_GPIO_FLAGS	(GPIO_INPUT | DT_GPIO_FLAGS(SW0_NODE, gpios) | GPIO_INT_EDGE)
-#else
-#error "Unsupported board: sw0 devicetree alias is not defined"
-#endif
-
-#define BUTTON_DEBOUNCE_DELAY_MS 250
 
 #define GAS_TRIGGER_THRESHOLD 800
 
-// for debouncing the button
-static uint32_t btn_time = 0;
-static uint32_t btn_last_time = 0;
+struct k_delayed_work sens_cli_autoconf_work;
+struct k_delayed_work gen_onoff_cli_autoconf_work;
+extern void sens_cli_autoconf_handler(struct k_work *item);
+extern void gen_onoff_cli_autoconf_handler(struct k_work *item);
 
-static struct gpio_callback button_cb_data;
-
-// GPIO for LED 0
-const struct device *led;
 int op_id = 0;
-
-#define LED0_NODE	DT_ALIAS(led0)
-
-#if DT_NODE_HAS_STATUS(LED0_NODE, okay) && DT_NODE_HAS_PROP(LED0_NODE, gpios)
-#define LED0_GPIO_LABEL	DT_GPIO_LABEL(LED0_NODE, gpios)
-#define LED0_GPIO_PIN	DT_GPIO_PIN(LED0_NODE, gpios)
-#define LED0_GPIO_FLAGS	(GPIO_OUTPUT | DT_GPIO_FLAGS(LED0_NODE, gpios))
-#else
-#error "Unsupported board: led0 devicetree alias is not defined"
-#endif
 
 static const uint8_t dev_uuid[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x00 };
 
 
-void led_on(void) {
-	printk("turning led on\n");
-	gpio_pin_set(led, LED0_GPIO_PIN, 1);
-}
-
-void led_off(void) {
-	printk("turning led off\n");
-	gpio_pin_set(led, LED0_GPIO_PIN, 0);
-}
-
 static void attention_on(struct bt_mesh_model *model) {
 	printk("attention_on\n");
-	led_on();
+	led_on(0, 255, 0);
 }
 
 static void attention_off(struct bt_mesh_model *model) {
@@ -112,6 +79,10 @@ static struct bt_mesh_cfg_srv cfg_srv = {
 	.net_transmit = BT_MESH_TRANSMIT(2, 20)
 };
 
+// -------------------------------------------------------------------------------------------------------
+// Config client
+// -------------
+static struct bt_mesh_cfg_cli cfg_cli = {};
 
 // -------------------------------------------------------------------------------------------------------
 // Health Server
@@ -125,9 +96,9 @@ static struct bt_mesh_health_srv health_srv = {
 // -------------------------------------------------------------------------------------------------------
 // Composition
 // -----------
-
 static struct bt_mesh_model sig_models[] = {
 	BT_MESH_MODEL_CFG_SRV(&cfg_srv),
+	BT_MESH_MODEL_CFG_CLI(&cfg_cli),
 	BT_MESH_MODEL_HEALTH_SRV(&health_srv, &health_pub),
 	GEN_ONOFF_CLI_MODEL,
 	SENSOR_CLIENT_MODEL,
@@ -146,119 +117,77 @@ static const struct bt_mesh_comp comp = {
 };
 
 // -------------------------------------------------------------------------------------------------------
+// Self-configuration
+// -------
+void sens_cli_autoconf_handler(struct k_work *item) {
+	uint8_t err;
+	uint16_t root_addr = elements[0].addr;
+
+	err = sensor_cli_autoconf(root_addr, elements[0].addr);
+	if (err) {
+		printk("Error setting default config of gas sensor model\n");
+	}
+}
+
+void gen_onoff_cli_autoconf_handler(struct k_work *item) {
+	uint8_t err;
+	uint16_t root_addr = elements[0].addr;
+
+	err = gen_onoff_autoconf(root_addr, elements[0].addr);
+	if (err) {
+		printk("Error setting default config of gas sensor model\n");
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------
 // Data callbacks
 // -------
 void thp_data_callback(float temperature, float humidity, float pressure, uint16_t recv_dest) {
 	printf("\n\nthp_data_callback received temp: %.2f, hum: %.2f, press: %.2f. Pub address: 0x%02x\n\n", temperature, humidity, pressure, recv_dest);
-	// TODO forward to Raspberry Pi
 }
 
 void gas_data_callback(uint16_t ppm, uint16_t recv_dest) {
 	printf("\n\ngas_data_callback received ppm: %d. Pub address: 0x%02x\n\n", ppm, recv_dest);
 	
 	if (ppm > GAS_TRIGGER_THRESHOLD) {
-		led_on();
+		led_on(0, 255, 0);
 	} else {
 		led_off();
 	}
-	
-	// TODO forward to Raspberry Pi
 }
 
 
-// -------------------------------------------------------------------------------------------------------
-// LED
-// -------
+void button_callback(uint8_t click_type) {
+	if (click_type == FAST_CLICK) {
 
-void initialize_led(void) {
-	printk("initializeLED\n");
-	int ret;
+		// show blue feedback
+		led_pulse(2, 300, 100, 0, 0, 255);
 
-	led = device_get_binding(LED0_GPIO_LABEL);
-
-	if (led == NULL) {
-		printk("Didn't find LED device %s\n", LED0_GPIO_LABEL);
-		return;
-	}
-
-	ret = gpio_pin_configure(led, LED0_GPIO_PIN, GPIO_OUTPUT_ACTIVE | LED0_GPIO_FLAGS);
-	if (ret != 0) {
-		printk("Error %d: failed to configure LED device %s pin %d\n",
-		       ret, LED0_GPIO_LABEL, LED0_GPIO_PIN);
-		return;
-	}
-
-	printk("Set up LED at %s pin %d\n", LED0_GPIO_LABEL, LED0_GPIO_PIN);
-	led_off();
-}
-
-// -------------------------------------------------------------------------------------------------------
-// Buttons
-// -------
-
-bool debounce() {
-	bool ignore = false;
-	btn_time = k_uptime_get_32();
-	if (btn_time < (btn_last_time + BUTTON_DEBOUNCE_DELAY_MS)) {
-		ignore = true;
-	} else {
-		ignore = false;
-	}
-	btn_last_time = btn_time;
-	return ignore;
-}
-
-void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins) {	
-	if (!debounce()) {
-		printk("Button pressed at %" PRIu32 "\n", k_cycle_get_32());
-		
-		if (op_id % 4 == 0) {
+		if (op_id % 3 == 0) {
 			gen_onoff_set_unack(0);
-		} else if (op_id % 4 == 1) {
+		} else if (op_id % 3 == 1) {
 			gen_onoff_set_unack(1);
-		} else if (op_id % 4 == 2) {
-			gen_onoff_get(&sig_models[2]);
-		} else if (op_id % 4 == 3) {
+		} else if (op_id % 3 == 2) {
 			sensor_cli_get(&sig_models[3]);
 		}
-		
 		op_id++;
+
+	} else if (click_type == LONG_CLICK) {
+		// Autoconf must be performed with a delay between one model and the next one to allow the bluetooth stack to
+		// allocate transmission buffers
+		k_delayed_work_submit(&sens_cli_autoconf_work, K_SECONDS(2));
+		k_delayed_work_submit(&gen_onoff_cli_autoconf_work, K_SECONDS(6));
+		// show green feedback
+		led_pulse(2, 300, 100, 0, 255, 0);
+
+	} else if (click_type == LONG_LONG_CLICK) {
+		printk("Resetting node to unprovisioned\n");
+		// show red feedback
+		led_pulse(2, 300, 100, 255, 0, 0);
+		bt_mesh_reset();
+	} else {
+		printk("Button callback warning: unknown click type");
 	}
-}
-
-void configure_buttons(void)
-{
-	int ret;
-	printk("configure_buttons\n");
-
-	const struct device *button;
-
-	button = device_get_binding(SW0_GPIO_LABEL);
-	if (button == NULL) {
-		printk("Error: didn't find %s device\n", SW0_GPIO_LABEL);
-		return;
-	}
-
-	ret = gpio_pin_configure(button, SW0_GPIO_PIN, SW0_GPIO_FLAGS);
-	if (ret != 0) {
-		printk("Error %d: failed to configure %s pin %d\n",
-		       ret, SW0_GPIO_LABEL, SW0_GPIO_PIN);
-		return;
-	}
-
-	ret = gpio_pin_interrupt_configure(button,
-					   SW0_GPIO_PIN,
-					   GPIO_INT_EDGE_TO_ACTIVE);
-	if (ret != 0) {
-		printk("Error %d: failed to configure interrupt on %s pin %d\n",
-			ret, SW0_GPIO_LABEL, SW0_GPIO_PIN);
-		return;
-	}
-
-	gpio_init_callback(&button_cb_data, button_pressed, BIT(SW0_GPIO_PIN));
-	gpio_add_callback(button, &button_cb_data);
-	printk("Set up button at %s pin %d\n", SW0_GPIO_LABEL, SW0_GPIO_PIN);
-
 }
 
 static void bt_ready(int err) {
@@ -288,26 +217,24 @@ static void bt_ready(int err) {
 		printk("Node has not been provisioned: beaconing\n");
 		bt_mesh_prov_enable(BT_MESH_PROV_ADV | BT_MESH_PROV_GATT); // provision using either gatt or advertising bearer
 	}
-	
 }
 
 
 void main(void) {
+	printk("\n\n----- THINGY 52 PROXY NODE -----\n\n");
 	int err;
-	printk("thingy switch node\n");
 
-	onoff_tid = 0;
+	button_setup(&button_callback);
+	led_setup();
 
-	configure_buttons();
-
-	initialize_led();
-	
 	err = bt_enable(bt_ready);
-	if (err)
-	{
+	if (err) {
 		printk("bt_enable failed with err %d\n", err);
 	}
 	
 	sensor_cli_set_thp_callback(&thp_data_callback);
 	sensor_cli_set_gas_callback(&gas_data_callback);
+
+	k_delayed_work_init(&sens_cli_autoconf_work, sens_cli_autoconf_handler);
+	k_delayed_work_init(&gen_onoff_cli_autoconf_work, gen_onoff_cli_autoconf_handler);
 }

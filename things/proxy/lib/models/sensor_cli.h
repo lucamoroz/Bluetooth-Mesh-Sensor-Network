@@ -105,4 +105,31 @@ void sensor_cli_get(struct bt_mesh_model *model) {
 	}
 }
 
+int sensor_cli_autoconf(uint16_t root_addr, uint16_t elem_addr) {
+	int err;
+	
+	err = bt_mesh_cfg_mod_app_bind(0, root_addr, elem_addr, 0, BT_MESH_MODEL_ID_SENSOR_CLI, NULL);
+	if (err) {
+		printk("Error binding default app key to sensor client model\n");
+		return err;
+	}
+
+	struct bt_mesh_cfg_mod_pub pub_sens_cli = {
+		.addr = 0xFFFF,
+		.app_idx = 0,
+		.ttl = 7,
+		.period = 0,
+		.transmit = BT_MESH_TRANSMIT(0, 0),
+	};
+
+	err = bt_mesh_cfg_mod_pub_set(0, root_addr, elem_addr, BT_MESH_MODEL_ID_SENSOR_CLI, &pub_sens_cli, NULL);
+	if (err) {
+		printk("Error setting default publish config to sensor client model\n");
+		return err;
+	}
+
+	printk("Successfully configured sensor client model\n");
+	return 0;
+}
+
 #endif //SENSOR_CLI_H

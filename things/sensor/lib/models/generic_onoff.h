@@ -2,18 +2,12 @@
 #define GENERIC_ONOFF_H
 
 #include <bluetooth/mesh.h>
-#include <drivers/gpio.h>
-
-#define PORT "GPIO_P0"
-#define LED_R 7
-#define LED_G 5
-#define LED_B 6
+#include <led.h>
 
 // states and state changes
 uint8_t onoff_state;
-// GPIO for the Thingy LED controller
-const struct device *led_ctrlr;
 
+// led color
 uint16_t rgb_r = 255;
 uint16_t rgb_g = 255;
 uint16_t rgb_b = 255;
@@ -26,22 +20,6 @@ struct bt_mesh_model *reply_model;
 
 extern void generic_onoff_status(bool publish, uint8_t on_or_off);
 
-void thingy_led_on(int r, int g, int b) {
-	// LEDs on Thingy are "active low" so zero means on. Args are expressed as RGB 0-255 values so we map them to GPIO low/high.
-	r = !(r / 255);
-	g = !(g / 255);
-	b = !(b / 255);
-
-	gpio_pin_set(led_ctrlr, LED_R, r);
-	gpio_pin_set(led_ctrlr, LED_G, g);
-	gpio_pin_set(led_ctrlr, LED_B, b);
-}
-
-void thingy_led_off() {
-	gpio_pin_set(led_ctrlr, LED_R, 1);
-	gpio_pin_set(led_ctrlr, LED_G, 1);
-	gpio_pin_set(led_ctrlr, LED_B, 1);
-}
 
 #define BT_MESH_MODEL_OP_GENERIC_ONOFF_GET BT_MESH_MODEL_OP_2(0x82, 0x01)
 #define BT_MESH_MODEL_OP_GENERIC_ONOFF_SET BT_MESH_MODEL_OP_2(0x82, 0x02)
@@ -62,9 +40,9 @@ static void set_onoff_state(struct bt_mesh_model *model, struct bt_mesh_msg_ctx 
 	uint8_t tid = net_buf_simple_pull_u8(buf);
 	printk("set_onoff_state: onoff=%u, TID=%u\n", onoff_state, tid);
 	if (onoff_state == 0) {
-		thingy_led_off();
+		led_off();
 	} else {
-		thingy_led_on(rgb_r, rgb_b, rgb_g);
+		led_on(rgb_r, rgb_b, rgb_g);
 	}
 
 	// See mesh profile spec - section 3.7.7.2
@@ -81,13 +59,6 @@ static void set_onoff_state(struct bt_mesh_model *model, struct bt_mesh_msg_ctx 
 // generic onoff server functions
 
 static void generic_onoff_get(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
-    printk("generic_onoff_get\n");
-	// todo remove - for interest only
-	printk("ctx net_idx=0x%02x\n", ctx->net_idx);
-	printk("ctx app_idx=0x%02x\n", ctx->app_idx);
-	printk("ctx addr=0x%02x\n", ctx->addr);
-	printk("ctx recv_dst=0x%02x\n", ctx->recv_dst);  // Note: this is the Publish Address
-
 	reply_addr = ctx->addr;
 	reply_net_idx = ctx->net_idx;
 	reply_app_idx = ctx->app_idx;
@@ -152,24 +123,43 @@ void generic_onoff_status(bool publish, uint8_t on_or_off) {
 	}
 }
 
-static void configure_thingy_led_controller() {
-	led_ctrlr = device_get_binding(PORT);
-	gpio_pin_configure(led_ctrlr, LED_R, GPIO_OUTPUT);
-	gpio_pin_configure(led_ctrlr, LED_G, GPIO_OUTPUT);
-	gpio_pin_configure(led_ctrlr, LED_B, GPIO_OUTPUT);
-}
-
 void indicate_on() {
 	int r = 0, g = 0, b = 255;
-	thingy_led_on(r, g, b);
+	led_on(r, g, b);
     k_msleep(1000);
-    r = 0, g = 0, b = 0;
-	thingy_led_on(r, g, b);	
+	led_off();
 }
 
 void generic_onoff_setup() {
-	configure_thingy_led_controller();
+	led_setup();
 	indicate_on();
+}
+
+int generic_onoff_autoconf(uint16_t root_addr, uint16_t elem_addr) {
+	int err;
+
+	err = bt_mesh_cfg_mod_app_bind(0, root_addr, elem_addr, 0, BT_MESH_MODEL_ID_GEN_ONOFF_SRV, NULL);
+	if (err) {
+		printk("Error binding default app key to generic onoff model\n");
+		return err;
+	}
+
+	struct bt_mesh_cfg_mod_pub pub_thp = {
+		.addr = 0xFFFF,
+		.app_idx = 0,
+		.ttl = 7,
+		.period = 0,
+		.transmit = BT_MESH_TRANSMIT(0, 0),
+	};
+
+	err = bt_mesh_cfg_mod_pub_set(0, root_addr, elem_addr, BT_MESH_MODEL_ID_GEN_ONOFF_SRV, &pub_thp, NULL);
+	if (err) {
+		printk("Error setting default publish config to generic onoff model\n");
+		return err;
+	}
+
+	printk("Successfully configured generic onoff model\n");
+	return 0;
 }
 
 #endif //GENERIC_ONOFF_H

@@ -130,4 +130,31 @@ int thp_sensor_setup() {
 	return thp_reader_setup();
 }
 
+int thp_sensor_autoconf(uint16_t root_addr, uint16_t elem_addr, uint16_t pub_period) {
+	int err;
+
+	err = bt_mesh_cfg_mod_app_bind(0, root_addr, elem_addr, 0, BT_MESH_MODEL_ID_SENSOR_SRV, NULL);
+	if (err) {
+		printk("Error binding default app key to THP sensor model\n");
+		return err;
+	}
+
+	struct bt_mesh_cfg_mod_pub pub_thp = {
+		.addr = 0xFFFF,
+		.app_idx = 0,
+		.ttl = 7,
+		.period = BT_MESH_PUB_PERIOD_SEC(pub_period),
+		.transmit = BT_MESH_TRANSMIT(0, 20),
+	};
+
+	err = bt_mesh_cfg_mod_pub_set(0, root_addr, elem_addr, BT_MESH_MODEL_ID_SENSOR_SRV, &pub_thp, NULL);
+	if (err) {
+		printk("Error setting default publish config to THP sensor model\n");
+		return err;
+	}
+
+	printk("Successfully configured THP sensor model\n");
+	return 0;
+}
+
 #endif //THP_SENSOR_H
