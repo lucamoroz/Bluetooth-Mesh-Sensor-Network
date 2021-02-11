@@ -151,20 +151,28 @@ void gen_onoff_autoconf_handler(struct k_work *item) {
 	}
 }
 
-void button_callback() {
-	// Display first element address, which is set during provisioning. 
-	// The address of the second element is always the address of the first element plus one, 
-	// therefore only the first is shown with led_pulse.
+void button_callback(uint8_t click_type) {
+	if (click_type == FAST_CLICK) {
+		// Display first element address, which is set during provisioning. 
+		// The address of the second element is always the address of the first element plus one, 
+		// therefore only the first is shown with led_pulse.
+		printk("First element address: %d, second element address: %d\n", elements[0].addr, elements[1].addr);
+		k_msleep(200);
+		led_pulse(elements[0].addr, 500, 200);	
 
-	// Autoconf must be performed with a delay between one model and the next one to allow the bluetooth stack to
-	// allocate transmission buffers
-	k_delayed_work_submit(&gas_autoconf_work, K_SECONDS(2));
-	k_delayed_work_submit(&gen_onoff_autoconf_work, K_SECONDS(6));
-	k_delayed_work_submit(&thp_autoconf_work, K_SECONDS(10));
+	} else if (click_type == LONG_CLICK) {
+		// Autoconf must be performed with a delay between one model and the next one to allow the bluetooth stack to
+		// allocate transmission buffers
+		k_delayed_work_submit(&gas_autoconf_work, K_SECONDS(2));
+		k_delayed_work_submit(&gen_onoff_autoconf_work, K_SECONDS(6));
+		k_delayed_work_submit(&thp_autoconf_work, K_SECONDS(10));
 
-	printk("First element address: %d, second element address: %d\n", elements[0].addr, elements[1].addr);
-	k_msleep(200);
-	led_pulse(elements[0].addr, 500, 200);	
+	} else if (click_type == LONG_LONG_CLICK) {
+		printk("Resetting node to unprovisioned\n");
+		bt_mesh_reset();
+	} else {
+		printk("Button callback warning: unknown click type");
+	}
 }
 
 void gas_cb(uint16_t ppm) {

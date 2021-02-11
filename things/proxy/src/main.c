@@ -157,23 +157,29 @@ void gas_data_callback(uint16_t ppm, uint16_t recv_dest) {
 }
 
 
-void button_callback() {
+void button_callback(uint8_t click_type) {
+	if (click_type == FAST_CLICK) {
+		if (op_id % 3 == 0) {
+			gen_onoff_set_unack(0);
+		} else if (op_id % 3 == 1) {
+			gen_onoff_set_unack(1);
+		} else if (op_id % 3 == 2) {
+			sensor_cli_get(&sig_models[3]);
+		}
+		op_id++;
 
-	// Autoconf must be performed with a delay between one model and the next one to allow the bluetooth stack to
-	// allocate transmission buffers
-	k_delayed_work_submit(&sens_cli_autoconf_work, K_SECONDS(2));
-	k_delayed_work_submit(&gen_onoff_cli_autoconf_work, K_SECONDS(6));
+	} else if (click_type == LONG_CLICK) {
+		// Autoconf must be performed with a delay between one model and the next one to allow the bluetooth stack to
+		// allocate transmission buffers
+		k_delayed_work_submit(&sens_cli_autoconf_work, K_SECONDS(2));
+		k_delayed_work_submit(&gen_onoff_cli_autoconf_work, K_SECONDS(6));
 
-	return;
-	if (op_id % 3 == 0) {
-		gen_onoff_set_unack(0);
-	} else if (op_id % 3 == 1) {
-		gen_onoff_set_unack(1);
-	} else if (op_id % 3 == 2) {
-		sensor_cli_get(&sig_models[3]);
+	} else if (click_type == LONG_LONG_CLICK) {
+		printk("Resetting node to unprovisioned\n");
+		bt_mesh_reset();
+	} else {
+		printk("Button callback warning: unknown click type");
 	}
-		
-	op_id++;
 }
 
 static void bt_ready(int err) {
