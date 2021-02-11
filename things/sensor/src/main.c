@@ -27,7 +27,7 @@ static const uint8_t dev_uuid[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 
 // provisioning callback functions
 static void attention_on(struct bt_mesh_model *model) {
 	printk("attention_on()\n");
-	led_on(255,0,0);
+	led_on(0,255,0);
 }
 
 static void attention_off(struct bt_mesh_model *model) {
@@ -158,7 +158,7 @@ void button_callback(uint8_t click_type) {
 		// therefore only the first is shown with led_pulse.
 		printk("First element address: %d, second element address: %d\n", elements[0].addr, elements[1].addr);
 		k_msleep(200);
-		led_pulse(elements[0].addr, 500, 200);	
+		led_pulse(elements[0].addr, 500, 200, 255, 255, 255);	
 
 	} else if (click_type == LONG_CLICK) {
 		// Autoconf must be performed with a delay between one model and the next one to allow the bluetooth stack to
@@ -166,9 +166,13 @@ void button_callback(uint8_t click_type) {
 		k_delayed_work_submit(&gas_autoconf_work, K_SECONDS(2));
 		k_delayed_work_submit(&gen_onoff_autoconf_work, K_SECONDS(6));
 		k_delayed_work_submit(&thp_autoconf_work, K_SECONDS(10));
+		// show green feedback
+		led_pulse(2, 300, 100, 0, 255, 0);
 
 	} else if (click_type == LONG_LONG_CLICK) {
 		printk("Resetting node to unprovisioned\n");
+		// show red feedback
+		led_pulse(2, 300, 100, 255, 0, 0);
 		bt_mesh_reset();
 	} else {
 		printk("Button callback warning: unknown click type");

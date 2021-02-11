@@ -20,7 +20,7 @@ void led_off();
  * 
  * @note The calling thread will be suspended: consider offloading the work.
  */
-void led_pulse(uint8_t times, uint32_t on_ms, uint32_t off_ms);
+void led_pulse(uint8_t times, uint32_t on_ms, uint32_t off_ms, int r, int g, int b);
 
 void led_setup();
 

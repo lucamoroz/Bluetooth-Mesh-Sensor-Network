@@ -26,7 +26,7 @@ static const uint8_t dev_uuid[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 
 
 static void attention_on(struct bt_mesh_model *model) {
 	printk("attention_on\n");
-	led_on(0, 0, 255);
+	led_on(0, 255, 0);
 }
 
 static void attention_off(struct bt_mesh_model *model) {
@@ -159,6 +159,10 @@ void gas_data_callback(uint16_t ppm, uint16_t recv_dest) {
 
 void button_callback(uint8_t click_type) {
 	if (click_type == FAST_CLICK) {
+
+		// show white feedback
+		led_pulse(2, 300, 100, 255, 255, 255);
+
 		if (op_id % 3 == 0) {
 			gen_onoff_set_unack(0);
 		} else if (op_id % 3 == 1) {
@@ -173,9 +177,13 @@ void button_callback(uint8_t click_type) {
 		// allocate transmission buffers
 		k_delayed_work_submit(&sens_cli_autoconf_work, K_SECONDS(2));
 		k_delayed_work_submit(&gen_onoff_cli_autoconf_work, K_SECONDS(6));
+		// show green feedback
+		led_pulse(2, 300, 100, 0, 255, 0);
 
 	} else if (click_type == LONG_LONG_CLICK) {
 		printk("Resetting node to unprovisioned\n");
+		// show red feedback
+		led_pulse(2, 300, 100, 255, 0, 0);
 		bt_mesh_reset();
 	} else {
 		printk("Button callback warning: unknown click type");
