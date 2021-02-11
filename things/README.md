@@ -18,18 +18,17 @@ Alternatively, from the project rood dir run `pio run --target upload --environm
 2. Press ADD NODE and click on target
 3. Press IDENTIFY and then PROVISION
 4. Select either No OOB or Outpub OOB, the latter requires you to see the output logs (see Debug section) in order to input the code displayed with the output
-5. After successfully configuring the node, select it from the available devices
-6. From the elements section, select one model (e.g. Sensor Server - Sensor node)
-7. Bind an application key to the model
-8. Set publication address: only the models subscribed to this adderess will receive the message
-9. If sensor server: set publish period to change the publishing cadence
-10. Subscribe to a publication address in order to receive message (e.g. Sensor Client on Proxy nodes subscribes to all sensors publication addresses)
+5. After successfully configuring the node, disconnect the nRF mesh application.
+6. Press the sensor node button for 5 seconds to automatically configure them. The leds will blink green twice after releasing the button.
+7. Do the same with the proxy node.
 
+Alternatively you can fully configure your mesh using only the nRF Mesh application.
 
-Note: you can associate a publication address for e.g. each room of your building. The proxy can subscribe to each of these addresses.
+## Reset a node
+If you need to remove a node from the mesh or re-configure it, you can press the node's button for 10 seconds: it will blink red twice and reset itself to the unprovisioned state.
 
-## Erase
-To reset the devices (e.g. to perform provisioning again), run: `nrfjprog -e`
+## Erase a device
+To fully reset a device, connect it with a JLink probe and run: `nrfjprog -e`.
 
 ## Test configuration
 To check if messages are sent successfull:
