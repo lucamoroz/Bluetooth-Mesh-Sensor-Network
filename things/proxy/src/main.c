@@ -161,7 +161,7 @@ void button_callback(uint8_t click_type) {
 	if (click_type == FAST_CLICK) {
 
 		// show blue feedback
-		led_pulse(2, 300, 100, 255, 0, 0);
+		led_pulse(2, 300, 100, 0, 0, 255);
 
 		if (op_id % 3 == 0) {
 			gen_onoff_set_unack(0);
