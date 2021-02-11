@@ -24,6 +24,13 @@ Alternatively, from the project rood dir run `pio run --target upload --environm
 
 Alternatively you can fully configure your mesh using only the nRF Mesh application.
 
+## Identify sensor node
+After being provisioned, a sensor node has an address that identifies it in the mesh network.
+
+This address will be used to associate a sensor measure to a sensor node. 
+
+The address is displayed by pressing the button of a sensor node, which will blink as many times as the node's id.
+
 ## Reset a node
 If you need to remove a node from the mesh or re-configure it, you can press the node's button for 10 seconds: it will blink red twice and reset itself to the unprovisioned state.
 
