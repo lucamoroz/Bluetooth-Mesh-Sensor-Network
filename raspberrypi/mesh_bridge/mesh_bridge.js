@@ -384,7 +384,7 @@ function logAndValidatePdu(octets) {
   console.log(colors.green("        TransMIC=" + hex_transmic));
   console.log(colors.green("    NetMIC=" + hex_netmic));
 
-  let decoded = decode_message(hex_params);
+  let decoded = decode_message(hex_pdu_src, hex_params);
   console.log(decoded);
   mqtt.send_data(decoded);
 }
@@ -431,15 +431,16 @@ function read_short_le(number) {
   );
 }
 
-function decode_message(message) {
+function decode_message(sender, message) {
   message = message.toLowerCase();
+  let name = get_name(sender);
 
   switch (message.substring(0, 4)) {
     case "102a":
-      return decode_thp(message);
+      return decode_thp(name, message);
 
     case "132a":
-      return decode_gas(message);
+      return decode_gas(name, message);
 
     default:
       console.log("Error: unknown message");
@@ -447,7 +448,15 @@ function decode_message(message) {
   }
 }
 
-function decode_thp(message) {
+function get_name(address) {
+  if (address in config.address_map) {
+    return config.address_map[address];
+  }
+
+  return address;
+}
+
+function decode_thp(name, message) {
   if (
     message.substring(0, 4) !== "102a"
     || message.substring(8, 12) !== "112a"
@@ -457,20 +466,22 @@ function decode_thp(message) {
     return {};
   }
 
-  return {
-    'temperature': read_short_le(message.substring(4, 8)) / 100,
-    'humidity': read_short_le(message.substring(12, 16)) / 100,
-    'pressure': read_short_le(message.substring(20, 24)) / 100
-  }
+  let obj = {};
+  obj['temperature_' + name] = read_short_le(message.substring(4, 8)) / 100;
+  obj['humidity_' + name] = read_short_le(message.substring(12, 16)) / 100;
+  obj['pressure_' + name] = read_short_le(message.substring(20, 24)) / 100;
+
+  return obj;
 }
 
-function decode_gas(message) {
+function decode_gas(name, message) {
   if (message.substring(0, 4) !== "132a") {
     console.log("Error: malformed gas message");
     return {};
   }
 
-  return {
-    'co2_ppm': read_short_le(message.substr(4, 8)),
-  }
+  let obj = {};
+  obj['co2_ppm_' + name] = read_short_le(message.substr(4, 8));
+
+  return obj;
 }
