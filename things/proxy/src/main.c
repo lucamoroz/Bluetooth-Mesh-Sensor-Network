@@ -14,6 +14,11 @@
 
 #define GAS_TRIGGER_THRESHOLD 800
 
+struct k_delayed_work sens_cli_autoconf_work;
+struct k_delayed_work gen_onoff_cli_autoconf_work;
+extern void sens_cli_autoconf_handler(struct k_work *item);
+extern void gen_onoff_cli_autoconf_handler(struct k_work *item);
+
 int op_id = 0;
 
 static const uint8_t dev_uuid[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x00 };
@@ -74,6 +79,10 @@ static struct bt_mesh_cfg_srv cfg_srv = {
 	.net_transmit = BT_MESH_TRANSMIT(2, 20)
 };
 
+// -------------------------------------------------------------------------------------------------------
+// Config client
+// -------------
+static struct bt_mesh_cfg_cli cfg_cli = {};
 
 // -------------------------------------------------------------------------------------------------------
 // Health Server
@@ -87,9 +96,9 @@ static struct bt_mesh_health_srv health_srv = {
 // -------------------------------------------------------------------------------------------------------
 // Composition
 // -----------
-
 static struct bt_mesh_model sig_models[] = {
 	BT_MESH_MODEL_CFG_SRV(&cfg_srv),
+	BT_MESH_MODEL_CFG_CLI(&cfg_cli),
 	BT_MESH_MODEL_HEALTH_SRV(&health_srv, &health_pub),
 	GEN_ONOFF_CLI_MODEL,
 	SENSOR_CLIENT_MODEL,
@@ -108,11 +117,33 @@ static const struct bt_mesh_comp comp = {
 };
 
 // -------------------------------------------------------------------------------------------------------
+// Self-configuration
+// -------
+void sens_cli_autoconf_handler(struct k_work *item) {
+	uint8_t err;
+	uint16_t root_addr = elements[0].addr;
+
+	err = sensor_cli_autoconf(root_addr, elements[0].addr);
+	if (err) {
+		printk("Error setting default config of gas sensor model\n");
+	}
+}
+
+void gen_onoff_cli_autoconf_handler(struct k_work *item) {
+	uint8_t err;
+	uint16_t root_addr = elements[0].addr;
+
+	err = gen_onoff_autoconf(root_addr, elements[0].addr);
+	if (err) {
+		printk("Error setting default config of gas sensor model\n");
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------
 // Data callbacks
 // -------
 void thp_data_callback(float temperature, float humidity, float pressure, uint16_t recv_dest) {
 	printf("\n\nthp_data_callback received temp: %.2f, hum: %.2f, press: %.2f. Pub address: 0x%02x\n\n", temperature, humidity, pressure, recv_dest);
-	// TODO forward to Raspberry Pi
 }
 
 void gas_data_callback(uint16_t ppm, uint16_t recv_dest) {
@@ -125,7 +156,15 @@ void gas_data_callback(uint16_t ppm, uint16_t recv_dest) {
 	}
 }
 
+
 void button_callback() {
+
+	// Autoconf must be performed with a delay between one model and the next one to allow the bluetooth stack to
+	// allocate transmission buffers
+	k_delayed_work_submit(&sens_cli_autoconf_work, K_SECONDS(2));
+	k_delayed_work_submit(&gen_onoff_cli_autoconf_work, K_SECONDS(6));
+
+	return;
 	if (op_id % 3 == 0) {
 		gen_onoff_set_unack(0);
 	} else if (op_id % 3 == 1) {
@@ -181,4 +220,7 @@ void main(void) {
 	
 	sensor_cli_set_thp_callback(&thp_data_callback);
 	sensor_cli_set_gas_callback(&gas_data_callback);
+
+	k_delayed_work_init(&sens_cli_autoconf_work, sens_cli_autoconf_handler);
+	k_delayed_work_init(&gen_onoff_cli_autoconf_work, gen_onoff_cli_autoconf_handler);
 }

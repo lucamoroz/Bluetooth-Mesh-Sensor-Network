@@ -86,5 +86,32 @@ void gen_onoff_set_unack(uint8_t on_or_off) {
 	}
 }
 
+int gen_onoff_autoconf(uint16_t root_addr, uint16_t elem_addr) {
+	int err;
+	
+	err = bt_mesh_cfg_mod_app_bind(0, root_addr, elem_addr, 0, BT_MESH_MODEL_ID_GEN_ONOFF_CLI, NULL);
+	if (err) {
+		printk("Error binding default app key to generic onoff client model\n");
+		return err;
+	}
+
+	struct bt_mesh_cfg_mod_pub pub_gen_onoff = {
+		.addr = 0xFFFF,
+		.app_idx = 0,
+		.ttl = 7,
+		.period = 0,
+		.transmit = BT_MESH_TRANSMIT(0, 0),
+	};
+
+	err = bt_mesh_cfg_mod_pub_set(0, root_addr, elem_addr, BT_MESH_MODEL_ID_GEN_ONOFF_CLI, &pub_gen_onoff, NULL);
+	if (err) {
+		printk("Error setting default publish config to generic onoff model\n");
+		return err;
+	}
+
+	printk("Successfully configured generic onoff model\n");
+	return 0;
+}
+
 
 #endif
