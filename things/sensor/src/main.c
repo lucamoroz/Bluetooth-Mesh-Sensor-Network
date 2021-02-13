@@ -156,10 +156,15 @@ void button_callback(uint8_t click_type) {
 		// Display first element address, which is set during provisioning. 
 		// The address of the second element is always the address of the first element plus one, 
 		// therefore only the first is shown with led_pulse.
-		printk("First element address: %d, second element address: %d\n", elements[0].addr, elements[1].addr);
-		k_msleep(200);
-		led_pulse(elements[0].addr, 500, 200, 255, 255, 255);	
-
+		if (bt_mesh_is_provisioned()) {
+			printk("First element address: %d, second element address: %d\n", elements[0].addr, elements[1].addr);
+			k_msleep(200);
+			led_pulse(elements[0].addr, 500, 200, 255, 255, 255);	
+		} else {
+			printk("Node not yet provisioned!\n");
+			k_msleep(200);
+			led_pulse(4, 100, 100, 255, 0, 0);
+		}
 	} else if (click_type == LONG_CLICK) {
 		// Autoconf must be performed with a delay between one model and the next one to allow the bluetooth stack to
 		// allocate transmission buffers
