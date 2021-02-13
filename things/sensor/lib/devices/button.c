@@ -8,9 +8,6 @@
 
 const struct device *button;
 
-#define BTN_DOWN 2148744
-#define BTN_UP 2146696
-
 // for debouncing the button
 static uint32_t btn_time = 0;
 static uint32_t btn_last_time = 0;
@@ -24,7 +21,7 @@ struct button_work_info {
 	struct k_work work;
 	bool is_running;
 	uint8_t click_type;
-} work_info;
+} btn_work_info;
 
 
 button_cb btn_cb = NULL;
@@ -51,35 +48,32 @@ void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t
 		return;
 	}
 	
-    if (value == BTN_DOWN && debounce()) {
+    if ((value & BIT(SW0_GPIO_PIN)) && debounce()) {
         return; // Ignore fast consecutive clicks
     }
 
-	if (value == BTN_DOWN) {
+	if (value & BIT(SW0_GPIO_PIN)) {
 		printk("Button down\n");
 		btn_down_time = k_uptime_get_32();
-	} else if (value == BTN_UP) {
+	} else {
 		printk("Button up\n");
 		uint32_t delta_time = k_uptime_get_32() - btn_down_time;
 
-		if (work_info.is_running) {
+		if (btn_work_info.is_running) {
 			printk("Work not submitted: previously submitted work still running\n");
 			return;
 		}
 
-		work_info.click_type = FAST_CLICK;
+		btn_work_info.click_type = FAST_CLICK;
 		if (delta_time > LONG_CLICK_MS && delta_time < LONG_LONG_CLICK_MS) {
-			work_info.click_type = LONG_CLICK;
+			btn_work_info.click_type = LONG_CLICK;
 		} else if (delta_time > LONG_LONG_CLICK_MS) {
-			work_info.click_type = LONG_LONG_CLICK;
+			btn_work_info.click_type = LONG_LONG_CLICK;
 		}
 
-		printk("Submitting work with click type %d\n", work_info.click_type);
-		k_work_submit(&work_info.work);
+		printk("Submitting work with click type %d\n", btn_work_info.click_type);
+		k_work_submit(&btn_work_info.work);
 
-	} else {
-		printk("Unknown button value\n");
-		return;
 	}
 }
 
@@ -117,7 +111,7 @@ void button_setup(button_cb cb) {
 	gpio_add_callback(button, &button_cb_data);
 	printk("Set up button at %s pin %d\n", SW0_GPIO_LABEL, SW0_GPIO_PIN);
 
-	k_work_init(&work_info.work, button_work_handler);
+	k_work_init(&btn_work_info.work, button_work_handler);
 
     btn_cb = cb;
 }
