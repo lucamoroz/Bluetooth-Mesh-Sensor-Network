@@ -237,4 +237,8 @@ void main(void) {
 
 	k_delayed_work_init(&sens_cli_autoconf_work, sens_cli_autoconf_handler);
 	k_delayed_work_init(&gen_onoff_cli_autoconf_work, gen_onoff_cli_autoconf_handler);
+
+	// show "ready"
+	led_setup();
+	led_pulse(1, 500, 0, 0, 255, 0);
 }

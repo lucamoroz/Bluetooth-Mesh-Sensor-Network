@@ -244,4 +244,8 @@ void main(void) {
 	k_delayed_work_init(&thp_autoconf_work, thp_autoconf_handler);
 	k_delayed_work_init(&gas_autoconf_work, gas_autoconf_handler);
 	k_delayed_work_init(&gen_onoff_autoconf_work, gen_onoff_autoconf_handler);
+
+	// show "ready"
+	led_setup();
+	led_pulse(1, 500, 0, 0, 0, 255);
 }

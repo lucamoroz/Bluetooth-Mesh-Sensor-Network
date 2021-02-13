@@ -123,16 +123,8 @@ void generic_onoff_status(bool publish, uint8_t on_or_off) {
 	}
 }
 
-void indicate_on() {
-	int r = 0, g = 0, b = 255;
-	led_on(r, g, b);
-    k_msleep(1000);
-	led_off();
-}
-
 void generic_onoff_setup() {
 	led_setup();
-	indicate_on();
 }
 
 int generic_onoff_autoconf(uint16_t root_addr, uint16_t elem_addr) {
