@@ -42,6 +42,20 @@ static const struct bt_mesh_health_srv_cb health_srv_cb = {
 
 static int provisioning_output_pin(bt_mesh_output_action_t action, uint32_t number) {
 	printk("OOB Number: %u\n", number);
+
+	// only 3-digits numbers supported
+	if (number > 999) {
+		return 0; 
+	}
+
+	// Show the pin by blinking the led with 3 different lights
+	k_msleep(2000);
+	led_pulse((number/100)%10, 500, 200, 255, 0, 0);
+	k_msleep(2000);
+	led_pulse((number/10)%10, 500, 200, 0, 255, 0);
+	k_msleep(2000);
+	led_pulse(number%10, 500, 200, 0, 0, 255);	
+
 	return 0;
 }
 
@@ -56,13 +70,12 @@ static void provisioning_reset(void) {
 // provisioning properties and capabilities
 static const struct bt_mesh_prov prov = {
 	.uuid = dev_uuid,
-	.output_size = 4,
+	.output_size = 3,
 	.output_actions = BT_MESH_DISPLAY_NUMBER,
 	.output_number = provisioning_output_pin,
 	.complete = provisioning_complete,
 	.reset = provisioning_reset,
 };
-
 
 // -------------------------------------------------------------------------------------------------------
 // Configuration Server
