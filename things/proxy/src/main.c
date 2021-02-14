@@ -11,7 +11,6 @@
 #include <../lib/devices/led.h>
 #include <../lib/devices/button.h>
 
-
 #define GAS_TRIGGER_THRESHOLD 800
 
 struct k_delayed_work sens_cli_autoconf_work;
@@ -23,6 +22,8 @@ int op_id = 0;
 
 static const uint8_t dev_uuid[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x00 };
 
+#define GAS_TRIGGERED_NODES_CAPACITY 128
+static uint8_t gas_triggered_nodes[GAS_TRIGGERED_NODES_CAPACITY];
 
 static void attention_on(struct bt_mesh_model *model) {
 	printk("attention_on\n");
@@ -156,16 +157,38 @@ void gen_onoff_cli_autoconf_handler(struct k_work *item) {
 // -------------------------------------------------------------------------------------------------------
 // Data callbacks
 // -------
-void thp_data_callback(float temperature, float humidity, float pressure, uint16_t recv_dest) {
-	printf("\n\nthp_data_callback received temp: %.2f, hum: %.2f, press: %.2f. Pub address: 0x%02x\n\n", temperature, humidity, pressure, recv_dest);
+void thp_data_callback(float temperature, float humidity, float pressure, uint16_t node_addr) {
+	printf("\n\nthp_data_callback received temp: %.2f, hum: %.2f, press: %.2f. Node address: 0x%02x\n\n", temperature, humidity, pressure, node_addr);
 }
 
-void gas_data_callback(uint16_t ppm, uint16_t recv_dest) {
-	printf("\n\ngas_data_callback received ppm: %d. Pub address: 0x%02x\n\n", ppm, recv_dest);
-	
+/** 
+ * Track how many nodes detected co2 ppm above threshold. If any (in range [0, 127]): show a green light.
+ */ 
+void gas_data_callback(uint16_t ppm, uint16_t node_addr) {
+	printf("\n\ngas_data_callback received ppm: %d. Node address: 0x%02x\n\n", ppm, node_addr);
+
+	if (node_addr > 127) {
+		printk("Node %d trigger not tracked: too high node id\n", node_addr);
+		return;
+	}
+
 	if (ppm > GAS_TRIGGER_THRESHOLD) {
+		if (gas_triggered_nodes[node_addr]) {
+			// gas trigger already set, therefore led is already on
+			return;
+		}
+
+		gas_triggered_nodes[node_addr] = 1;
 		led_on(0, 255, 0);
 	} else {
+		gas_triggered_nodes[node_addr] = 0;
+
+		// check if all tracked nodes in the mesh have co2 below theshold. If so, turn off led
+		for (uint16_t i=0; i<GAS_TRIGGERED_NODES_CAPACITY; i++) {
+			if (gas_triggered_nodes[i]) {
+				return;
+			}
+		}
 		led_off();
 	}
 }
