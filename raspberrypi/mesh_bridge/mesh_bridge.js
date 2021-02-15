@@ -298,7 +298,7 @@ function logAndValidatePdu(octets) {
   hex_pdu_src = hex_ctl_ttl_seq_src.substring(8, 12);
   // validate SRC
   src_int = parseInt(hex_pdu_src,16);
-  if (src_int < 1 || src_int > 127) {
+  if (src_int < 1 || src_int > 32767) {
     console.log(colors.red("SRC is not a valid unicast address. 0x0001-0x7FFF allowed. Ref 3.4.2.2"));
     return;
   }
