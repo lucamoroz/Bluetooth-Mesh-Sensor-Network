@@ -33,6 +33,25 @@ function send_data(data) {
 client.on('connect', function () {
   console.log("MQTT connected to: " + config.mqtt_url)
   status_connected = true;
+
+  // subscribe to RPCs from the server to this device
+  client.subscribe('v1/devices/me/rpc/request/+')
 })
+
+client.on('message', function (topic, message) {
+  console.log('Received RPC message');
+  console.log('request.topic: ' + topic);
+  console.log('request.body: ' + message.toString());
+  
+  var request = JSON.parse(message.toString());
+
+  if (request.method == "onoff-set") {
+    var params = JSON.parse(request.params);
+    var on_or_off = params.onoff;
+
+    console.log("Sending generic onoff message set with value " + params.onoff);
+    // TODO send message to mesh
+  }
+});
 
 module.exports.send_data = send_data;
