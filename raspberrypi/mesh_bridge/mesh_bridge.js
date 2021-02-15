@@ -141,19 +141,22 @@ function onServicesAndCharacteristicsDiscovered(error, services, characteristics
 
   // send messages to mesh, write without response
   // data is a buffer
-  /*
+   /*
   if (isConnected) {
     // TODO retrieve node address, opcode and parameters from MQTT
     let opcode = '8203';
     let params = 'aaaaaaaa';
     let destination = 'ffff';
-    let data = build_message(opcode, params, destination);
-    meshCharacteristicIn.write(data, true, error => {
-      if (error) {
-        console.log('Error sending to mesh_proxy_data_in');
-      } else {
-        console.log('Messagge sent to mesh successfully');
-      }
+    let segments = build_message(opcode, params, destination);
+    segments.forEach(function(segment) {
+      let data = Buffer.from(segment);
+      meshCharacteristicIn.write(data, true, error => {
+        if (error) {
+          console.log('Error sending to mesh_proxy_data_in');
+        } else {
+          console.log('Messagge sent to mesh successfully');
+        }
+      });
     });
   } else {
     console.log('ERROR: IV index has not been configured by Mesh Beacon yet!');
@@ -536,14 +539,14 @@ function build_message(opcode, params, hex_dst) {
   console.log(`Access Payload: ${hex_access_payload}`);
 
   // upper transport PDU content
-  // !! nonce works only for unsegmented packages !!
+  // !! nonce works only for unsegmented access PDUs !!
   hex_app_nonce = "0100" + hex_pdu_seq + hex_src + hex_dst + hex_iv_index;
   let utp_enc_result = crypto.meshAuthEncAccessPayload(hex_appkey, hex_app_nonce, hex_access_payload);
   let upper_trans_pdu = `${utp_enc_result.EncAccessPayload}${utp_enc_result.TransMIC}`;
   console.log(`Upper Transport PDU: ${upper_trans_pdu}`);
 
   // check if upper transport PDU is too long and must be segmented
-  if (upper_trans_pdu.lenght > 30) {
+  if (upper_trans_pdu.length > 30) {
       console.log("WARNING: Access payload is too long. Lower Transport Layer segmentation required.")
       return;
   }
@@ -585,10 +588,27 @@ function build_message(opcode, params, hex_dst) {
 
   // proxy PDU header
   let proxy_pdu = "";
-  // TODO proxy PDU segmentation
-  proxy_pdu = proxy_pdu + utils.intToHex(0);
-  proxy_pdu = proxy_pdu + network_pdu;
-  console.log(`Proxy PDU: ${proxy_pdu}`);
+  let segments = [];
 
-  return proxy_pdu;
+  console.log(network_pdu.length);
+  if (network_pdu.length > 38) {
+      console.log(`Proxy PDU is too long. Segmenting...`);
+      segments[0] = proxy_pdu + utils.intToHex(40) + network_pdu.substring(0,38);
+      console.log(`First Proxy PDU segment: ${segments[0]}`);
+      segmented_npdu = network_pdu.substring(38);
+      let i = 1;
+      while (segmented_npdu.length > 38) {
+          segments[i] = proxy_pdu + utils.intToHex(80) + segmented_npdu.substring(0,38);
+          segmented_npdu = segmented_npdu.substring(38);
+          i++;
+          console.log(`Intermediate Proxy PDU segment: ${segments[i]}`);
+      };
+      segments[i] = proxy_pdu + utils.intToHex(80) + segmented_npdu;
+      console.log(`Last Proxy PDU segment: ${segments[i]}`);
+  } else {
+      segments[0] = proxy_pdu + utils.intToHex(0) + network_pdu;
+      console.log(`Proxy PDU: ${segments[0]}`);
+  }
+
+  return segments;
 }
