@@ -18,7 +18,9 @@ const MESH_CHARACTERISTIC_IN_UUID = '2add';
 const MESH_CHARACTERISTIC_OUT_UUID = '2ade';
 
 // proxy client is connected once it receives the IV index from a Mesh Beacon messagge
+let send_interval;
 let isConnected = false;
+let sequence_number = 0;
 
 let segmentation_buffer = null;
 let pdu_segmentation_buffer = [];
@@ -33,7 +35,6 @@ let hex_iv_index = config.hex_iv_index;
 let hex_netkey = config.hex_netkey;
 let hex_appkey = config.hex_appkey;
 let hex_src = config.hex_src;
-let hex_pdu_seq = "000000";
 
 hex_encryption_key = ""; // derived from NetKey using k2
 hex_privacy_key = "";    // derived from NetKey using k2
@@ -98,6 +99,7 @@ function connectAndSetUp(peripheral) {
   peripheral.on('disconnect', () => {
     console.log('Disconnected. Restarting scan...');
     isConnected = false;
+    clearInterval(send_interval);
     noble.startScanning([MESH_SERVICE_UUID]);}
   );
 }
@@ -141,27 +143,30 @@ function onServicesAndCharacteristicsDiscovered(error, services, characteristics
 
   // send messages to mesh, write without response
   // data is a buffer
-   /*
-  if (isConnected) {
-    // TODO retrieve node address, opcode and parameters from MQTT
-    let opcode = '8203';
-    let params = 'aaaaaaaa';
-    let destination = 'ffff';
-    let segments = build_message(opcode, params, destination);
-    segments.forEach(function(segment) {
-      let data = Buffer.from(segment);
-      meshCharacteristicIn.write(data, true, error => {
-        if (error) {
-          console.log('Error sending to mesh_proxy_data_in');
-        } else {
-          console.log('Messagge sent to mesh successfully');
-        }
-      });
-    });
-  } else {
-    console.log('ERROR: IV index has not been configured by Mesh Beacon yet!');
-  }
-  */
+  send_interval = setInterval(function() {
+    if (isConnected) {
+        // TODO retrieve node address, opcode and parameters from MQTT
+        let opcode = '8203';
+        let params = 'aabbbb';
+        let destination = '0002';
+        let segments = build_message(opcode, params, destination);
+        segments.forEach(function(segment) {
+          let data = Buffer.from(segment);
+          let octets = Uint8Array.from(data);
+          logAndValidatePdu(octets);
+          /*
+          meshCharacteristicIn.write(data, true, error => {
+            if (error) {
+              console.log('Error sending to mesh_proxy_data_in');
+            } else {
+              console.log('Messagge sent to mesh successfully');
+            }
+          }); */
+        });
+      } else {
+        console.log('ERROR: IV index has not been configured by Mesh Beacon yet!');
+      }
+  }, 10000);
 }
 
 //----------------------------------
@@ -429,9 +434,11 @@ function logAndValidatePdu(octets) {
   console.log(colors.green("        TransMIC=" + hex_transmic));
   console.log(colors.green("    NetMIC=" + hex_netmic));
 
+  /*
   let decoded = decode_message(hex_pdu_src, hex_params);
   console.log(decoded);
   mqtt.send_data(decoded);
+  */
 }
 
 // append a Uint8Array to the segmentation buffer
@@ -564,6 +571,8 @@ function build_message(opcode, params, hex_dst) {
   let ttl_int = parseInt(2, 16);
   let ctl_ttl = (ctl_int | ttl_int);
   let npdu2 = utils.intToHex(ctl_ttl);
+  let hex_pdu_seq = utils.intToHex(sequence_number);
+  sequence_number++;
   let norm_enc_key = utils.normaliseHex(hex_encryption_key);
   let hex_net_nonce = "00" + npdu2 + hex_pdu_seq + hex_src + "0000" + hex_iv_index;
   let np_enc_result = crypto.meshAuthEncNetwork(norm_enc_key, hex_net_nonce, hex_dst, lower_transport_pdu);
