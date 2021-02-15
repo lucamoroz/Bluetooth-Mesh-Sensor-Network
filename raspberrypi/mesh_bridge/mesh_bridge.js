@@ -607,15 +607,15 @@ function build_message(opcode, params, hex_dst) {
       segmented_npdu = network_pdu.substring(38);
       let i = 1;
       while (segmented_npdu.length > 38) {
-          segments[i] = proxy_pdu + utils.intToHex(80) + segmented_npdu.substring(0,38);
+          segments[i] = proxy_pdu + utils.toHex(80,1) + segmented_npdu.substring(0,38);
           segmented_npdu = segmented_npdu.substring(38);
           i++;
           console.log(`Intermediate Proxy PDU segment: ${segments[i]}`);
       };
-      segments[i] = proxy_pdu + utils.intToHex(80) + segmented_npdu;
+      segments[i] = proxy_pdu + utils.toHex(192,1) + segmented_npdu;
       console.log(`Last Proxy PDU segment: ${segments[i]}`);
   } else {
-      segments[0] = proxy_pdu + utils.intToHex(0) + network_pdu;
+      segments[0] = proxy_pdu + utils.toHex(0,1) + network_pdu;
       console.log(`Proxy PDU: ${segments[0]}`);
   }
 
