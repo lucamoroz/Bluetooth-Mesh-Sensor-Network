@@ -108,18 +108,18 @@ function connectAndSetUp(peripheral) {
 // GATT notifications management
 //---------------------------------
 function onServicesAndCharacteristicsDiscovered(error, services, characteristics) {
-  const meshCharacteristicIn = "";
-  const meshCharacteristicOut = "";
+  let meshCharacteristicIn = "";
+  let meshCharacteristicOut = "";
   
   console.log('Discovered services and characteristics');
   console.log('Services: ' + services);
   characteristics.forEach(function(characteristic) {
     if (characteristic.uuid == MESH_CHARACTERISTIC_IN_UUID) {
-      const meshCharacteristicIn = characteristics.uuid;
+      meshCharacteristicIn = characteristic;
       console.log('Characteristics mesh_proxy_data_in: ' + meshCharacteristicIn);
     }
     if (characteristic.uuid == MESH_CHARACTERISTIC_OUT_UUID) {
-      const meshCharacteristicOut = characteristics.uuid;
+      meshCharacteristicOut = characteristic;
       console.log('Characteristics mesh_proxy_data_out: ' + meshCharacteristicOut);
     }
   })
@@ -547,7 +547,9 @@ function build_message(opcode, params, hex_dst) {
 
   // upper transport PDU content
   // !! nonce works only for unsegmented access PDUs !!
-  hex_app_nonce = "0100" + hex_pdu_seq + hex_src + hex_dst + hex_iv_index;
+  let hex_pdu_seq = utils.intToHex(sequence_number);
+  sequence_number++;
+  let hex_app_nonce = "0100" + hex_pdu_seq + hex_src + hex_dst + hex_iv_index;
   let utp_enc_result = crypto.meshAuthEncAccessPayload(hex_appkey, hex_app_nonce, hex_access_payload);
   let upper_trans_pdu = `${utp_enc_result.EncAccessPayload}${utp_enc_result.TransMIC}`;
   console.log(`Upper Transport PDU: ${upper_trans_pdu}`);
@@ -571,8 +573,6 @@ function build_message(opcode, params, hex_dst) {
   let ttl_int = parseInt(2, 16);
   let ctl_ttl = (ctl_int | ttl_int);
   let npdu2 = utils.intToHex(ctl_ttl);
-  let hex_pdu_seq = utils.intToHex(sequence_number);
-  sequence_number++;
   let norm_enc_key = utils.normaliseHex(hex_encryption_key);
   let hex_net_nonce = "00" + npdu2 + hex_pdu_seq + hex_src + "0000" + hex_iv_index;
   let np_enc_result = crypto.meshAuthEncNetwork(norm_enc_key, hex_net_nonce, hex_dst, lower_transport_pdu);
