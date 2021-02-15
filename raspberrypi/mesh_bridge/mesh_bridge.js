@@ -147,12 +147,12 @@ function onServicesAndCharacteristicsDiscovered(error, services, characteristics
     if (isConnected) {
         // TODO retrieve node address, opcode and parameters from MQTT
         let opcode = '8203';
-        let params = 'aabbbb';
+        let params = '000000';
         let destination = '0002';
         let segments = build_message(opcode, params, destination);
         segments.forEach(function(segment) {
-          let data = Buffer.from(segment);
-          let octets = Uint8Array.from(data);
+          console.log(`Sending segment: ${segment}`);
+          let octets = utils.hexToU8A(segment);
           logAndValidatePdu(octets);
           /*
           meshCharacteristicIn.write(data, true, error => {
@@ -192,7 +192,7 @@ function logAndValidatePdu(octets) {
     console.log(colors.red("SAR contains invalid value. 0-3 allowed. Ref Table 6.2"));
     return;
   } else if (sar == 0) {
-    console.log("Complete message: " + utils)
+    console.log("Complete message: " + utils.u8AToHexString(octets));
   } else if (sar == 1) {
     segmentation_buffer = null;
     segmentation_buffer = Buffer.from(octets);
@@ -549,7 +549,7 @@ function build_message(opcode, params, hex_dst) {
   // !! nonce works only for unsegmented access PDUs !!
   let hex_pdu_seq = utils.toHex(sequence_number, 3);
   sequence_number++;
-  let hex_app_nonce = "0100" + hex_pdu_seq + hex_src + hex_dst + hex_iv_index;
+  hex_app_nonce = "0100" + hex_pdu_seq + hex_src + hex_dst + hex_iv_index;
   let utp_enc_result = crypto.meshAuthEncAccessPayload(hex_appkey, hex_app_nonce, hex_access_payload);
   let upper_trans_pdu = `${utp_enc_result.EncAccessPayload}${utp_enc_result.TransMIC}`;
   console.log(`Upper Transport PDU: ${upper_trans_pdu}`);
