@@ -602,7 +602,7 @@ function build_message(opcode, params, hex_dst) {
   console.log(network_pdu.length);
   if (network_pdu.length > 38) {
       console.log(`Proxy PDU is too long. Segmenting...`);
-      segments[0] = proxy_pdu + utils.intToHex(40) + network_pdu.substring(0,38);
+      segments[0] = proxy_pdu + utils.toHex(40,1) + network_pdu.substring(0,38);
       console.log(`First Proxy PDU segment: ${segments[0]}`);
       segmented_npdu = network_pdu.substring(38);
       let i = 1;
