@@ -141,7 +141,7 @@ function onServicesAndCharacteristicsDiscovered(error, services, characteristics
 
   // send messages to mesh, write without response
   // data is a buffer
-  
+  /*
   if (isConnected) {
     // TODO retrieve node address, opcode and parameters from MQTT
     let opcode = '8203';
@@ -158,7 +158,7 @@ function onServicesAndCharacteristicsDiscovered(error, services, characteristics
   } else {
     console.log('ERROR: IV index has not been configured by Mesh Beacon yet!');
   }
-  
+  */
 }
 
 //----------------------------------
