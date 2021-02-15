@@ -23,6 +23,9 @@ let send_interval;
 let isConnected = false;
 let sequence_number = 0;
 
+let onoff_value = 0;
+let onoff_id = 0;
+
 let segmentation_buffer = null;
 let pdu_segmentation_buffer = [];
 let latest_window = Array(0x400).fill(-1); // Window for 1024 elements
@@ -160,21 +163,23 @@ function onServicesAndCharacteristicsDiscovered(error, services, characteristics
     if (isConnected) {
         // TODO retrieve node address, opcode and parameters from MQTT
         let opcode = '8203';
-        let params = '000000';
-        let destination = '0002';
+        let params = `${parseInt(onoff_value,16)}${parseInt(onoff_id,16)}`;
+        console.log(`Parameters hex values: ${params}`);
+        onoff_id++;
+        onoff_value = (onoff_value + 1) % 2;
+        let destination = '0003';
         let segments = build_message(opcode, params, destination);
         segments.forEach(function(segment) {
           console.log(`Sending segment: ${segment}`);
-          let octets = utils.hexToU8A(segment);
-          logAndValidatePdu(octets);
-          /*
+          //let octets = utils.hexToU8A(segment);
+          // logAndValidatePdu(octets);
           meshCharacteristicIn.write(data, true, error => {
             if (error) {
               console.log('Error sending to mesh_proxy_data_in');
             } else {
               console.log('Messagge sent to mesh successfully');
             }
-          }); */
+          }); 
         });
       } else {
         console.log('ERROR: IV index has not been configured by Mesh Beacon yet!');
@@ -298,7 +303,7 @@ function logAndValidatePdu(octets) {
   hex_pdu_src = hex_ctl_ttl_seq_src.substring(8, 12);
   // validate SRC
   src_int = parseInt(hex_pdu_src,16);
-  if (src_int < 1 || src_int > 32767) {
+  if (src_int < 1 || src_int > 127) {
     console.log(colors.red("SRC is not a valid unicast address. 0x0001-0x7FFF allowed. Ref 3.4.2.2"));
     return;
   }
