@@ -44,7 +44,7 @@ function init() {
 	*/
 
 function e(hex_plaintext, hex_key) {
-	console.log("AEC-ECB(" + hex_plaintext + "," + hex_key + ")");
+	// console.log("AEC-ECB(" + hex_plaintext + "," + hex_key + ")");
 
 	var hex_padding = "";
 	var ecb_encrypted = asmCrypto.AES_ECB.encrypt(asmCrypto.hex_to_bytes(hex_plaintext), asmCrypto.hex_to_bytes(hex_key), asmCrypto.hex_to_bytes(hex_padding));
@@ -124,9 +124,21 @@ function k3(N) {
 	return k3_material;
 };
 
+function k4(N) {
+
+	// K4(N) = AES-CMACt ( “id6” || 0x01 ) mod 2^6
+	T = getAesCmac(k4_salt.toString(), N);
+	k4_cmac = getAesCmac(T.toString(), id6_hex + "01");
+	var k4_cmac_bigint = bigInt(k4_cmac.toString(), 16);
+	k4_modval = k4_cmac_bigint.divmod(64);
+	k4_modval_bigint = bigInt(k4_modval.remainder);
+	k4_material = utils.bigIntegerToHexString(k4_modval_bigint);
+	return k4_material;
+};
+
 // Privacy Random = (EncDST || EncTransportPDU || NetMIC)[0–7]
 function privacyRandom(enc_dst, enc_transport_pdu, netmic) {
-	console.log("privacyRandom(" + enc_dst + "," + enc_transport_pdu + "," + netmic + ")");
+	//console.log("privacyRandom(" + enc_dst + "," + enc_transport_pdu + "," + netmic + ")");
 	temp = enc_dst + enc_transport_pdu + netmic;
 	if (temp.length >= 14) {
 		return temp.substring(0, 14);
@@ -152,6 +164,36 @@ function decryptAndVerify(hex_key, hex_cipher, hex_nonce, tag_size) {
 		dec_ver_result.error = err;
 	}
 	return dec_ver_result;
+}
+
+function obfuscate(enc_dst, enc_transport_pdu, netmic, ctl, ttl, seq, src, iv_index, privacy_key) {
+	//1. Create Privacy Random
+	hex_privacy_random = privacyRandom(enc_dst, enc_transport_pdu, netmic);
+	var result = {
+		privacy_key: '',
+		privacy_random: '',
+		pecb_input: '',
+		pecb: '',
+		ctl_ttl_seq_src: '',
+		obfuscated_ctl_ttl_seq_src: ''
+	};
+	result.privacy_key = privacy_key;
+	result.privacy_random = hex_privacy_random;
+	//2. Calculate PECB
+	result.pecb_input = "0000000000" + iv_index + hex_privacy_random;
+	pecb_hex = e(result.pecb_input, privacy_key);
+	pecb = pecb_hex.substring(0, 12);
+	result.pecb = pecb;
+	ctl_int = parseInt(ctl, 16);
+	ttl_int = parseInt(ttl, 16);
+	ctl_ttl = ctl_int | ttl_int;
+	ctl_ttl_hex = utils.toHex(ctl_ttl, 1);
+	ctl_ttl_seq_src = ctl_ttl_hex + seq + src;
+	result.ctl_ttl_seq_src = ctl_ttl_seq_src;
+	// 3. Obfuscate
+	obf = utils.xorU8Array(utils.hexToU8A(ctl_ttl_seq_src), utils.hexToU8A(pecb));
+	result.obfuscated_ctl_ttl_seq_src = utils.u8AToHexString(obf);
+	return result;
 }
 
 function deobfuscate(obfuscated_data, iv_index, netkey, privacy_random, privacy_key) {
@@ -181,10 +223,48 @@ function deobfuscate(obfuscated_data, iv_index, netkey, privacy_random, privacy_
 	return result;
 }
 
+function meshAuthEncNetwork(hex_encryption_key, hex_nonce, hex_dst, hex_transport_pdu) {
+	let arg3 = hex_dst + hex_transport_pdu;
+	let result = {
+		Encryption_Key: hex_encryption_key,
+		EncDST: 0,
+		EncTransportPDU: 0,
+		NetMIC: 0
+	};
+	u8_key = utils.hexToU8A(hex_encryption_key);
+	u8_nonce = utils.hexToU8A(hex_nonce);
+	u8_dst_plus_transport_pdu = utils.hexToU8A(arg3);
+	auth_enc_network = asmCrypto.AES_CCM.encrypt(u8_dst_plus_transport_pdu, u8_key, u8_nonce, new Uint8Array([]), 4);
+	hex = utils.u8AToHexString(auth_enc_network);
+	result.EncDST = hex.substring(0, 4);
+	result.EncTransportPDU = hex.substring(4, hex.length - 8);
+	result.NetMIC = hex.substring(hex.length - 8, hex.length);
+	return result;
+}
+
+function meshAuthEncAccessPayload(hex_appkey, hex_nonce, hex_payload) {
+	u8_key = utils.hexToU8A(hex_appkey);
+	u8_nonce = utils.hexToU8A(hex_nonce);
+	u8_payload = utils.hexToU8A(hex_payload);
+	var result = {
+		EncAccessPayload: 0,
+		TransMIC: 0
+	};
+	auth_enc_access = asmCrypto.AES_CCM.encrypt(u8_payload, u8_key, u8_nonce, new Uint8Array([]), 4);
+	hex = utils.u8AToHexString(auth_enc_access);
+	result.EncAccessPayload = hex.substring(0, hex.length - 8);
+	result.TransMIC = hex.substring(hex.length - 8, hex.length);
+	return result;
+};
+
 module.exports.getAesCmac = getAesCmac;
 module.exports.k2 = k2;
 module.exports.k3 = k3;
+module.exports.k4 = k4;
 module.exports.init = init;
 module.exports.privacyRandom = privacyRandom;
 module.exports.deobfuscate = deobfuscate;
+module.exports.obfuscate = obfuscate;
 module.exports.decryptAndVerify = decryptAndVerify;
+module.exports.meshAuthEncNetwork = meshAuthEncNetwork;
+module.exports.meshAuthEncAccessPayload = meshAuthEncAccessPayload;

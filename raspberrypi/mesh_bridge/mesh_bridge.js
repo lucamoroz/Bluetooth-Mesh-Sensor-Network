@@ -14,7 +14,11 @@ try {
 }
 
 const MESH_SERVICE_UUID = '1828';
-const MESH_CHARACTERISTIC_UUID = '2ade';
+const MESH_CHARACTERISTIC_IN_UUID = '2add';
+const MESH_CHARACTERISTIC_OUT_UUID = '2ade';
+
+// proxy client is connected once it receives the IV index from a Mesh Beacon messagge
+let isConnected = false;
 
 let segmentation_buffer = null;
 let pdu_segmentation_buffer = [];
@@ -28,10 +32,13 @@ let latest_window = Array(0x400).fill(-1); // Window for 1024 elements
 let hex_iv_index = config.hex_iv_index;
 let hex_netkey = config.hex_netkey;
 let hex_appkey = config.hex_appkey;
+let hex_src = config.hex_src;
+let hex_pdu_seq = "000000";
 
 hex_encryption_key = ""; // derived from NetKey using k2
 hex_privacy_key = "";    // derived from NetKey using k2
 hex_nid = "";            // derived from NetKey using k2
+hex_aid = "";            // derived from AppKey using k4
 hex_network_id = "";     // derived from NetKey using k3
 
 initialise();
@@ -42,6 +49,7 @@ function initialise() {
   hex_encryption_key = k2_material.encryption_key;
   hex_privacy_key = k2_material.privacy_key;
   hex_nid = k2_material.NID;
+  hex_aid = crypto.k4(hex_appkey);
   console.log('Network ID: ' + hex_nid);
   network_id = crypto.k3(hex_netkey);
 }
@@ -78,7 +86,7 @@ function connectAndSetUp(peripheral) {
 
     // specify the services and characteristics to discover
     const serviceUUIDs = [MESH_SERVICE_UUID];
-    const characteristicUUIDs = [MESH_CHARACTERISTIC_UUID];
+    const characteristicUUIDs = [MESH_CHARACTERISTIC_OUT_UUID,MESH_CHARACTERISTIC_IN_UUID];
 
     peripheral.discoverSomeServicesAndCharacteristics(
         serviceUUIDs,
@@ -89,6 +97,7 @@ function connectAndSetUp(peripheral) {
 
   peripheral.on('disconnect', () => {
     console.log('Disconnected. Restarting scan...');
+    isConnected = false;
     noble.startScanning([MESH_SERVICE_UUID]);}
   );
 }
@@ -97,26 +106,59 @@ function connectAndSetUp(peripheral) {
 // GATT notifications management
 //---------------------------------
 function onServicesAndCharacteristicsDiscovered(error, services, characteristics) {
+  const meshCharacteristicIn = "";
+  const meshCharacteristicOut = "";
+  
   console.log('Discovered services and characteristics');
-  const meshCharacteristic = characteristics[0];
   console.log('Services: ' + services);
-  console.log('Characteristics: ' + characteristics);
+  characteristics.forEach(function(characteristic) {
+    if (characteristic.uuid == MESH_CHARACTERISTIC_IN_UUID) {
+      const meshCharacteristicIn = characteristics.uuid;
+      console.log('Characteristics mesh_proxy_data_in: ' + meshCharacteristicIn);
+    }
+    if (characteristic.uuid == MESH_CHARACTERISTIC_OUT_UUID) {
+      const meshCharacteristicOut = characteristics.uuid;
+      console.log('Characteristics mesh_proxy_data_out: ' + meshCharacteristicOut);
+    }
+  })
+  
 
   // data callback receives notifications
-  meshCharacteristic.on('data', (data, isNotification) => {
+  meshCharacteristicOut.on('data', (data, isNotification) => {
     var octets = Uint8Array.from(data);
     console.log('Received: "' + utils.u8AToHexString(octets).toUpperCase() + '"');
     logAndValidatePdu(octets);
   });
 
   // subscribe to be notified whenever the peripheral update the characteristic
-  meshCharacteristic.subscribe(error => {
+  meshCharacteristicOut.subscribe(error => {
     if (error) {
       console.error('Error subscribing to mesh_proxy_data_out');
     } else {
       console.log('Subscribed for mesh_proxy_data_out notifications');
     }
   });
+
+  // send messages to mesh, write without response
+  // data is a buffer
+  
+  if (isConnected) {
+    // TODO retrieve node address, opcode and parameters from MQTT
+    let opcode = '8203';
+    let params = 'aaaaaaaa';
+    let destination = 'ffff';
+    let data = build_message(opcode, params, destination);
+    meshCharacteristicIn.write(data, true, error => {
+      if (error) {
+        console.log('Error sending to mesh_proxy_data_in');
+      } else {
+        console.log('Messagge sent to mesh successfully');
+      }
+    });
+  } else {
+    console.log('ERROR: IV index has not been configured by Mesh Beacon yet!');
+  }
+  
 }
 
 //----------------------------------
@@ -415,12 +457,12 @@ function extract_mesh_beacon(octets) {
   // TODO update IV index
 
   // check NID
-  // TODO verify the correctness of the statically configured network key
-  console.log("Network ID from beacon: " + utils.u8AToHexString(octets.subarray(2,10)));
+  // console.log("Network ID from beacon: " + utils.u8AToHexString(octets.subarray(2,10)));
 
   // retrieve IV index
   hex_iv_index = utils.u8AToHexString(octets.subarray(10,14));
   console.log("IV Index: " + hex_iv_index);
+  isConnected = true;
   return;
 }
 
@@ -484,4 +526,69 @@ function decode_gas(name, message) {
   obj['co2_ppm_' + name] = read_short_le(message.substr(4, 8));
 
   return obj;
+}
+
+function build_message(opcode, params, hex_dst) {
+  console.log("Assembling new mesh message...");
+
+  // access PDU content
+  let hex_access_payload = `${opcode}${params}`;
+  console.log(`Access Payload: ${hex_access_payload}`);
+
+  // upper transport PDU content
+  // !! nonce works only for unsegmented packages !!
+  hex_app_nonce = "0100" + hex_pdu_seq + hex_src + hex_dst + hex_iv_index;
+  let utp_enc_result = crypto.meshAuthEncAccessPayload(hex_appkey, hex_app_nonce, hex_access_payload);
+  let upper_trans_pdu = `${utp_enc_result.EncAccessPayload}${utp_enc_result.TransMIC}`;
+  console.log(`Upper Transport PDU: ${upper_trans_pdu}`);
+
+  // check if upper transport PDU is too long and must be segmented
+  if (upper_trans_pdu.lenght > 30) {
+      console.log("WARNING: Access payload is too long. Lower Transport Layer segmentation required.")
+      return;
+  }
+
+  // lower transport PDU content
+  let seg_int = parseInt(0, 16);
+  let akf_int = parseInt(0, 16);
+  let aid_int = parseInt(hex_aid, 16);    
+  let seg_afk_aid = (seg_int << 7) | (akf_int << 6) | aid_int;
+  let lower_transport_pdu = `${utils.intToHex(seg_afk_aid)}${upper_trans_pdu}`;
+  console.log(`Lower Transport PDU: ${lower_transport_pdu}`);
+
+  // encrypt network PDU
+  let ctl_int = parseInt(0, 16);
+  let ttl_int = parseInt(2, 16);
+  let ctl_ttl = (ctl_int | ttl_int);
+  let npdu2 = utils.intToHex(ctl_ttl);
+  let norm_enc_key = utils.normaliseHex(hex_encryption_key);
+  let hex_net_nonce = "00" + npdu2 + hex_pdu_seq + hex_src + "0000" + hex_iv_index;
+  let np_enc_result = crypto.meshAuthEncNetwork(norm_enc_key, hex_net_nonce, hex_dst, lower_transport_pdu);
+  let enc_dst = np_enc_result.EncDST;
+  let enc_transport_pdu = np_enc_result.EncTransportPDU;
+  let netmic = np_enc_result.NetMIC;
+  console.log(`Encrypted network payload: ${enc_dst}${enc_transport_pdu}${netmic}`)
+  
+  // obfuscate network header
+  let obfuscated = crypto.obfuscate(enc_dst, enc_transport_pdu,
+      netmic, 0, 2, hex_pdu_seq, hex_src, hex_iv_index, hex_privacy_key);
+  let obfuscated_ctl_ttl_seq_src = obfuscated.obfuscated_ctl_ttl_seq_src;
+  console.log(`Obfuscated network header: ${obfuscated_ctl_ttl_seq_src}`)
+
+  // assemble complete network PDU
+  let ivi = utils.leastSignificantBit(parseInt(utils.normaliseHex(hex_iv_index), 16));
+  let ivi_int = parseInt(ivi, 16);
+  let nid_int = parseInt(hex_nid, 16);
+  let npdu1 = utils.intToHex((ivi_int << 7) | nid_int);
+  let network_pdu = npdu1 + obfuscated_ctl_ttl_seq_src + enc_dst + enc_transport_pdu + netmic;
+  console.log(`Network PDU: ${network_pdu}`);
+
+  // proxy PDU header
+  let proxy_pdu = "";
+  // TODO proxy PDU segmentation
+  proxy_pdu = proxy_pdu + utils.intToHex(0);
+  proxy_pdu = proxy_pdu + network_pdu;
+  console.log(`Proxy PDU: ${proxy_pdu}`);
+
+  return proxy_pdu;
 }

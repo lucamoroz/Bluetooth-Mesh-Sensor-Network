@@ -121,6 +121,7 @@ function hexToU8A(hex) {
 
     if (hex.length % 2 != 0) {
         console.log("ERROR: hex string must be even number in length and contain nothing but hex chars");
+        console.log(hex);
         return;
     }
 
@@ -164,6 +165,16 @@ function hexToBytes(str) {
     return result;
 }
 
+function normaliseHex(raw) {
+    value = raw.replace(/\s/g, '');
+    value = value.toUpperCase();
+    return value;
+}
+
+function leastSignificantBit(number) {
+    return number & 1;
+}
+
 module.exports.u8AToHexString = u8AToHexString;
 module.exports.getOpcodeAndParams = getOpcodeAndParams;
 module.exports.toAsciiCodes = toAsciiCodes;
@@ -171,7 +182,10 @@ module.exports.bytesToHex = bytesToHex;
 module.exports.intToHex = intToHex;
 module.exports.xorU8Array = xorU8Array;
 module.exports.hexToU8A = hexToU8A;
+module.exports.toHex = toHex;
 module.exports.bigIntegerToHexString = bigIntegerToHexString;
 module.exports.hexStringToArray = hexStringToArray;
 module.exports.u8AToHexString = u8AToHexString;
 module.exports.hexToBytes = hexToBytes;
+module.exports.normaliseHex = normaliseHex;
+module.exports.leastSignificantBit = leastSignificantBit;
