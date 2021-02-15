@@ -1,17 +1,24 @@
+/**
+ * Generic onoff server model that controls the state of a LED.
+ * Include GENERIC_ONOFF_MODEL in an element and setup the model with generic_onoff_setup().
+ * The model publication context can be auto-configured with generic_onoff_autoconf().
+ */
+
 #ifndef GENERIC_ONOFF_H
 #define GENERIC_ONOFF_H
 
 #include <bluetooth/mesh.h>
 #include <led.h>
 
-// states and state changes
+/* Stores current on/off state */
 uint8_t onoff_state;
 
-// led color
+// Define led color
 uint16_t rgb_r = 255;
 uint16_t rgb_g = 255;
 uint16_t rgb_b = 255;
 
+// Variables used to handle an acknowledged get message
 bool publish = false;
 uint16_t reply_addr;
 uint8_t reply_net_idx;
@@ -20,15 +27,15 @@ struct bt_mesh_model *reply_model;
 
 extern void generic_onoff_status(bool publish, uint8_t on_or_off);
 
-
 #define BT_MESH_MODEL_OP_GENERIC_ONOFF_GET BT_MESH_MODEL_OP_2(0x82, 0x01)
 #define BT_MESH_MODEL_OP_GENERIC_ONOFF_SET BT_MESH_MODEL_OP_2(0x82, 0x02)
 #define BT_MESH_MODEL_OP_GENERIC_ONOFF_SET_UNACK BT_MESH_MODEL_OP_2(0x82, 0x03)
 #define BT_MESH_MODEL_OP_GENERIC_ONOFF_STATUS BT_MESH_MODEL_OP_2(0x82, 0x04)
 
-// generic onoff server model publication context
+/* generic onoff server model publication context */
 BT_MESH_MODEL_PUB_DEFINE(gen_onoff_pub, NULL, 2+1);
 
+/* Change onoff state and publish a state message according with bluetooth specifications. */
 static void set_onoff_state(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf, bool ack) {
 	uint8_t msg_onoff_state = net_buf_simple_pull_u8(buf);
 	if (msg_onoff_state == onoff_state) {
@@ -56,7 +63,6 @@ static void set_onoff_state(struct bt_mesh_model *model, struct bt_mesh_msg_ctx 
 	}
 }
 
-// generic onoff server functions
 
 static void generic_onoff_get(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
 	reply_addr = ctx->addr;
@@ -75,6 +81,7 @@ static void generic_onoff_set_unack(struct bt_mesh_model *model, struct bt_mesh_
 	set_onoff_state(model, ctx, buf, false);
 }
 
+/* Opcodes supported by this model */
 static const struct bt_mesh_model_op generic_onoff_op[] = {
     {BT_MESH_MODEL_OP_GENERIC_ONOFF_GET, 0, generic_onoff_get},
     {BT_MESH_MODEL_OP_GENERIC_ONOFF_SET, 2, generic_onoff_set},
@@ -84,10 +91,12 @@ static const struct bt_mesh_model_op generic_onoff_op[] = {
 
 #define GENERIC_ONOFF_MODEL BT_MESH_MODEL(BT_MESH_MODEL_ID_GEN_ONOFF_SRV, generic_onoff_op, &gen_onoff_pub, NULL)
 
-// generic onoff status TX message producer
+/**
+ * Send a message containing the current model state.
+ * @param publish true to use publication context, false to reply to a get message
+ * @param on_or_off current model state
+ */
 void generic_onoff_status(bool publish, uint8_t on_or_off) {
-	// the status message can either be published to the configured model publish address 
-	// or sent to an application specified destination addr (e.g. in case of set with ack or status get)
 	int err;
 	struct bt_mesh_model model = GENERIC_ONOFF_MODEL;
 	if (publish && model.pub->addr == BT_MESH_ADDR_UNASSIGNED) {
@@ -123,10 +132,18 @@ void generic_onoff_status(bool publish, uint8_t on_or_off) {
 	}
 }
 
+/**
+ * Initializes the model.
+ */
 void generic_onoff_setup() {
 	led_setup();
 }
 
+/**
+ * Can be used to self-configure the publishing parameters after provisioning.
+ * @param root_addr id of the node hosting this model
+ * @param elem_addr id of the element in the node hosting this model
+ */
 int generic_onoff_autoconf(uint16_t root_addr, uint16_t elem_addr) {
 	int err;
 

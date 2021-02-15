@@ -12,12 +12,15 @@
 #define LONG_LONG_CLICK 3
 
 /**
- * Button click called.
+ * Button click callback.
  * @param type can be one of FAST_CLICK, LONG_CLICK, or LONG_LONG_CLICK depending on
  *             how long the user has pressed the button.
  */
 typedef void (*button_cb)(uint8_t click_type);
 
+/**
+ * Setup the button with the given callback.
+ */
 void button_setup(button_cb cb);
 
 #endif

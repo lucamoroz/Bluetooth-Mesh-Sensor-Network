@@ -1,3 +1,16 @@
+/**
+ * Sensor server model wrapper for the THP sensor, which reads temperature, humidity and pressure.
+ * The model will periodically publish status messages. The publishing cadence can be set after 
+ * provisioning e.g. with the nRF Mesh application.
+ * Sensor statuses can also be published using thp_sensor_publish_data.
+ * Include THP_SENSOR_MODEL in an element and setup the model with thp_sensor_setup().
+ * The model publication context can be auto-configured with thp_sensor_autoconf().
+ * 
+ * Important note: sensor readings are published after being multiplied by 100. The reason is that
+ * we had errors when trying to append 32-bit values to a net_buf_simple, and we didn't want to lose
+ * the decimal part of the sensor reading.
+ */
+
 #ifndef THP_SENSOR_H
 #define THP_SENSOR_H
 
@@ -42,8 +55,12 @@ int thp_sensor_update_cb(struct bt_mesh_model *mod) {
 	return 0;
 }
 
+/* Publication context for temperature (4 bytes), humidity (4 bytes), pressure (4 bytes) */
 BT_MESH_MODEL_PUB_DEFINE(thp_sens_pub, thp_sensor_update_cb, 2+2+2+2+2+2);
 
+/**
+ * Publishes a sensor status message containing the current temperature, humidity and pressure.
+ */
 static void sensor_thp_status(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf) {
 	float temperature, humidity, pressure;
 	struct net_buf_simple *msg = model->pub->msg;
@@ -79,6 +96,7 @@ static void sensor_thp_status(struct bt_mesh_model *model, struct bt_mesh_msg_ct
 	printk("Sensor status published\n");
 }
 
+/* Opcodes supported by this model */
 static const struct bt_mesh_model_op thp_sens_srv_op[] = {
 	{ BT_MESH_MODEL_OP_SENSOR_GET, 0, sensor_thp_status },
 	BT_MESH_MODEL_OP_END,
@@ -88,7 +106,7 @@ static const struct bt_mesh_model_op thp_sens_srv_op[] = {
 
 /**
  * Can be used to force publication.
- * */
+ */
 static void thp_sensor_publish_data() {
 	float temperature, humidity, pressure;
 	int err;
@@ -126,10 +144,19 @@ static void thp_sensor_publish_data() {
 	printk("Sensor status published\n");
 }
 
+/** 
+ * Initializes the model and its sensors.
+ * @return 0 on success.
+ */
 int thp_sensor_setup() {
 	return thp_reader_setup();
 }
 
+/**
+ * Can be used to self-configure the publishing parameters after provisioning.
+ * @param root_addr id of the node hosting this model
+ * @param elem_addr id of the element in the node hosting this model
+ */
 int thp_sensor_autoconf(uint16_t root_addr, uint16_t elem_addr, uint16_t pub_period) {
 	int err;
 
