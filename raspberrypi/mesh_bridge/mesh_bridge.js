@@ -547,7 +547,7 @@ function build_message(opcode, params, hex_dst) {
 
   // upper transport PDU content
   // !! nonce works only for unsegmented access PDUs !!
-  let hex_pdu_seq = utils.intToHex(sequence_number);
+  let hex_pdu_seq = utils.toHex(sequence_number, 3);
   sequence_number++;
   let hex_app_nonce = "0100" + hex_pdu_seq + hex_src + hex_dst + hex_iv_index;
   let utp_enc_result = crypto.meshAuthEncAccessPayload(hex_appkey, hex_app_nonce, hex_access_payload);
