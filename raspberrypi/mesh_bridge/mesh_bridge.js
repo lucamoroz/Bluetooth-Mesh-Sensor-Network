@@ -1,9 +1,10 @@
 const noble = require('noble');
 const colors = require('colors');
-
+const fs = require('fs');
 const crypto = require('./crypto.js');
 const mqtt = require('./mqtt.js');
 const utils = require('./utils.js');
+
 
 let config;
 try {
@@ -53,6 +54,18 @@ function initialise() {
   hex_aid = crypto.k4(hex_appkey);
   console.log('Network ID: ' + hex_nid);
   network_id = crypto.k3(hex_netkey);
+
+  // restore sequence number
+  fs.readFile('seq', 'utf8', function(err, data){ 
+    if (!data) {
+        console.log('Created seq');
+        fs.writeFile('seq', sequence_number.toString(), (err) => { 
+            if (err) throw err; 
+        });
+    } else {
+      sequence_number = parseInt(data);
+    }
+  });
 }
 
 //------------------------------
@@ -548,7 +561,6 @@ function build_message(opcode, params, hex_dst) {
   // upper transport PDU content
   // !! nonce works only for unsegmented access PDUs !!
   let hex_pdu_seq = utils.toHex(sequence_number, 3);
-  sequence_number++;
   hex_app_nonce = "0100" + hex_pdu_seq + hex_src + hex_dst + hex_iv_index;
   let utp_enc_result = crypto.meshAuthEncAccessPayload(hex_appkey, hex_app_nonce, hex_access_payload);
   let upper_trans_pdu = `${utp_enc_result.EncAccessPayload}${utp_enc_result.TransMIC}`;
@@ -619,5 +631,11 @@ function build_message(opcode, params, hex_dst) {
       console.log(`Proxy PDU: ${segments[0]}`);
   }
 
+  // update sequence number
+  sequence_number++;
+  fs.writeFile('seq', sequence_number.toString(), (err) => { 
+    if (err) throw err; 
+  });
+  
   return segments;
 }
