@@ -42,6 +42,20 @@ static const struct bt_mesh_health_srv_cb health_srv_cb = {
 
 static int provisioning_output_pin(bt_mesh_output_action_t action, uint32_t number) {
 	printk("OOB Number: %u\n", number);
+
+	// only 3-digits numbers supported
+	if (number > 999) {
+		return 0; 
+	}
+
+	// Show the pin by blinking the led with 3 different lights
+	k_msleep(2000);
+	led_pulse((number/100)%10, 500, 200, 255, 0, 0);
+	k_msleep(2000);
+	led_pulse((number/10)%10, 500, 200, 0, 255, 0);
+	k_msleep(2000);
+	led_pulse(number%10, 500, 200, 0, 0, 255);	
+
 	return 0;
 }
 
@@ -56,13 +70,12 @@ static void provisioning_reset(void) {
 // provisioning properties and capabilities
 static const struct bt_mesh_prov prov = {
 	.uuid = dev_uuid,
-	.output_size = 4,
+	.output_size = 3,
 	.output_actions = BT_MESH_DISPLAY_NUMBER,
 	.output_number = provisioning_output_pin,
 	.complete = provisioning_complete,
 	.reset = provisioning_reset,
 };
-
 
 // -------------------------------------------------------------------------------------------------------
 // Configuration Server
@@ -156,10 +169,15 @@ void button_callback(uint8_t click_type) {
 		// Display first element address, which is set during provisioning. 
 		// The address of the second element is always the address of the first element plus one, 
 		// therefore only the first is shown with led_pulse.
-		printk("First element address: %d, second element address: %d\n", elements[0].addr, elements[1].addr);
-		k_msleep(200);
-		led_pulse(elements[0].addr, 500, 200, 255, 255, 255);	
-
+		if (bt_mesh_is_provisioned()) {
+			printk("First element address: %d, second element address: %d\n", elements[0].addr, elements[1].addr);
+			k_msleep(200);
+			led_pulse(elements[0].addr, 500, 200, 255, 255, 255);	
+		} else {
+			printk("Node not yet provisioned!\n");
+			k_msleep(200);
+			led_pulse(4, 100, 100, 255, 0, 0);
+		}
 	} else if (click_type == LONG_CLICK) {
 		// Autoconf must be performed with a delay between one model and the next one to allow the bluetooth stack to
 		// allocate transmission buffers
@@ -244,4 +262,8 @@ void main(void) {
 	k_delayed_work_init(&thp_autoconf_work, thp_autoconf_handler);
 	k_delayed_work_init(&gas_autoconf_work, gas_autoconf_handler);
 	k_delayed_work_init(&gen_onoff_autoconf_work, gen_onoff_autoconf_handler);
+
+	// show "ready"
+	led_setup();
+	led_pulse(1, 500, 0, 0, 0, 255);
 }

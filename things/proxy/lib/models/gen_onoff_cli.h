@@ -1,3 +1,10 @@
+/**
+ * Generic onoff client model.
+ * The model can set the state of generic onoff server models, and request their current status.
+ * Include GEN_ONOFF_CLI_MODEL in an element.
+ * The model publication context can be auto-configured with gen_onoff_autoconf().
+ */
+
 #ifndef GEN_ONOFF_CLI_H
 #define GEN_ONOFF_CLI_H
 
@@ -19,6 +26,7 @@ static void generic_onoff_status(struct bt_mesh_model *model, struct bt_mesh_msg
 	printk("generic_onoff_status onoff=%d\n", onoff_state);
 }
 
+/* Opcodes supported by this model */
 static const struct bt_mesh_model_op gen_onoff_cli_op[] = {
 	{BT_MESH_MODEL_OP_GENERIC_ONOFF_STATUS, 1, generic_onoff_status},
 	BT_MESH_MODEL_OP_END, // end of definition
@@ -26,8 +34,7 @@ static const struct bt_mesh_model_op gen_onoff_cli_op[] = {
 
 #define GEN_ONOFF_CLI_MODEL BT_MESH_MODEL(BT_MESH_MODEL_ID_GEN_ONOFF_CLI, gen_onoff_cli_op, &gen_onoff_cli, &onoff[0])
 
-// Generic OnOff Client - TX message producer functions
-// -----------------------------------------------------------
+/* Generic onoff get message to read the state of a generic onoff server */
 int gen_onoff_get(struct bt_mesh_model *model) {
 	printk("gen_onoff_get\n");
 	int err;
@@ -48,7 +55,7 @@ int gen_onoff_get(struct bt_mesh_model *model) {
 	return err;
 }
 
-// function used for both set ack and unack, distinguished by param msg_type
+/* Generic on/off message, can be acknowledged or not */
 int send_gen_onoff_set(uint8_t on_or_off, uint16_t msg_type) {
 	int err;
 	struct bt_mesh_model model = GEN_ONOFF_CLI_MODEL;
@@ -86,6 +93,11 @@ void gen_onoff_set_unack(uint8_t on_or_off) {
 	}
 }
 
+/**
+ * Can be used to self-configure the publishing parameters after provisioning.
+ * @param root_addr id of the node hosting this model
+ * @param elem_addr id of the element in the node hosting this model
+ */
 int gen_onoff_autoconf(uint16_t root_addr, uint16_t elem_addr) {
 	int err;
 	

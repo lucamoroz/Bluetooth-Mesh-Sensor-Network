@@ -1,44 +1,48 @@
 # How to use
-## Setup
+## Development environment setup
 1. Install VSCode
 2. Install Platformio IDE extension: https://platformio.org/install/ide?install=vscode 
 
 ## Build
 Open the project (e.g. proxy) from PIO Home and press `ctrl+alt+b`
 
-Alternatively, from the project rood dir run `pio run --environment thingy_52`
+Alternatively, from the node rood dir (e.g. things/proxy/) run `pio run --environment thingy_52`
 
 ## Upload
 Open the project (e.g. proxy) from PIO Home and press `ctrl+alt+u`
 
-Alternatively, from the project rood dir run `pio run --target upload --environment thingy_52`
+Alternatively, from the node rood dir (e.g. things/sensor) run `pio run --target upload --environment thingy_52`
+
+<b>Note</b>: to flash multiple sensor nodes, you may want to change the device UUID at: `sensor/src/main.c` variable `dev_uuid`.
 
 ## Provisioning
-1. Download the application nRF Mesh
-2. Press ADD NODE and click on target
-3. Press IDENTIFY and then PROVISION
-4. Select either No OOB or Outpub OOB, the latter requires you to see the output logs (see Debug section) in order to input the code displayed with the output
-5. After successfully configuring the node, disconnect the nRF mesh application.
+For each node that will be part of the mesh:
+1. Download the application nRF Mesh.
+2. Press ADD NODE and click on any unprovisioned target.
+3. Press IDENTIFY (the node's led will turn on for a few seconds) and then PROVISION.
+4. Select either No OOB or Outpub OOB, the latter will show a 3-digits code using the on-board LED: the first digit will be shown by blinking a red light, the second digit with a green light, and the third digit with a blue light (note that this process is more secure!).
+5. After successfully configuring the node, <b>disconnect the nRF mesh application</b> (this is important to avoid conflicts with the configuration client during automatic configuration - step 6).
 6. Press the sensor node button for 5 seconds to automatically configure them. The leds will blink green twice after releasing the button.
-7. Do the same with the proxy node.
 
-Alternatively you can fully configure your mesh using only the nRF Mesh application.
+Alternatively you can fully configure your mesh using only the nRF Mesh application, but after performing an automatic configuration you won't be able to change the models settings using the nRF Mesh application unless you reset the node (see Reset a node section).
 
 ## Identify sensor node
-After being provisioned, a sensor node has an address that identifies it in the mesh network.
+After being provisioned, a sensor node has an address that identifies it in the mesh network: this address can be used to associate a sensor measure to a specific sensor node. 
 
-This address will be used to associate a sensor measure to a sensor node. 
+<u>The node address can be displayed by pressing the button of a sensor node</u>, which will blink as many times as the node's id.
 
-The address is displayed by pressing the button of a sensor node, which will blink as many times as the node's id.
+Note: if the led will quickly blink red multiple times, it means the node has not been provisioned yet.
+
+Note 2: at startup, a proxy node shows a green light, while a sensor node shows a blue light.
 
 ## Reset a node
-If you need to remove a node from the mesh or re-configure it, you can press the node's button for 10 seconds: it will blink red twice and reset itself to the unprovisioned state.
+If you need to remove a node from the mesh or re-configure it, you can <u>press the node's button for 10 seconds</u>: it will blink red twice and reset itself to the unprovisioned state.
 
 ## Erase a device
 To fully reset a device, connect it with a JLink probe and run: `nrfjprog -e`.
 
 ## Test configuration
-To check if messages are sent successfull:
+To check if messages are sent and received successfully:
 1. Breath on the Sensor node to raise the CO2 level and trigger the sensor. The Sensor light should turn red until the CO2 level goes back to normal, it also sends a message (if correctly configured) that is received by the Proxy node, which will show a green light to notify the user that a Sensor node detected a high level of CO2.
 2. Press the Proxy node button to send Bluetooth Mesh messages, which will turn on/off the Sensor lights and send sensor_get requests. You will see debug messages on the RTT console.
 
