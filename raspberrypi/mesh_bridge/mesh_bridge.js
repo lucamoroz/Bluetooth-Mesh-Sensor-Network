@@ -21,11 +21,11 @@ let meshCharacteristicIn = "";
 let meshCharacteristicOut = "";
 
 // proxy client is connected once it receives the IV index from a Mesh Beacon messagge
-//let send_interval;
+let send_interval;
 let isConnected = false;
 let sequence_number = 0;
 
-let onoff_value = 0;
+let onoff_seq = 0;
 let onoff_id = 0;
 
 let segmentation_buffer = null;
@@ -117,7 +117,7 @@ function connectAndSetUp(peripheral) {
   peripheral.on('disconnect', () => {
     console.log('Disconnected. Restarting scan...');
     isConnected = false;
-    //clearInterval(send_interval);
+    clearInterval(send_interval);
     noble.startScanning([MESH_SERVICE_UUID]);}
   );
 }
@@ -126,7 +126,8 @@ function connectAndSetUp(peripheral) {
 // GATT notifications management
 //---------------------------------
 function onServicesAndCharacteristicsDiscovered(error, services, characteristics) {
-  
+
+
   console.log('Discovered services and characteristics');
   console.log('Services: ' + services);
   characteristics.forEach(function(characteristic) {
@@ -155,38 +156,47 @@ function onServicesAndCharacteristicsDiscovered(error, services, characteristics
       console.log('Subscribed for mesh_proxy_data_out notifications');
     }
   });
+
+  send_interval = setInterval(send_to_proxy, 500);
 }
 
 
-// send messages to mesh, write without response
-//send_interval = setInterval(function() {
-function send_to_proxy(on_or_off){
-  if (isConnected) {
-    onoff_value = utils.toHex(on_or_off,1);
-    let opcode = '8203';
-    let params = `${utils.toHex(onoff_value,1)}${utils.toHex(onoff_id,2)}`;
-    console.log(`Parameters hex values: ${params}`);
-    onoff_id++;
-    //onoff_value = (onoff_value + 1) % 2;
-    let destination = config.hex_sensor_add;
-    let segments = build_message(opcode, params, destination);
-    segments.forEach(function(segment) {
-      console.log(`Sending segment: ${segment}`);
-      let octets = utils.hexToU8A(segment)
-      let data = Buffer.from(octects);
-      logAndValidatePdu(octets);
-      meshCharacteristicIn.write(data, true, error => {
-        if (error) {
-          console.log('Error sending to mesh_proxy_data_in');
-        } else {
-          console.log('Messagge sent to mesh successfully');
-        }
-      }); 
-    });
-    } else {
-      console.log('ERROR: IV index has not been configured by Mesh Beacon yet!');
-    }
-};
+// periodically check new messages from MQTT and send them to the mesh network
+function send_to_proxy(){
+  if (!isConnected) {
+    console.log('ERROR: IV index has not been configured by Mesh Beacon yet!');
+    return;
+  }
+
+  let mqtt_onoff = mqtt.check_new_onoff();
+  if(mqtt_onoff.OnOff_seq = onoff_seq) {
+    // no new messages from MQTT has been received
+    return;
+  }
+
+  onoff_value = utils.toHex(mqtt_onoff.OnOff,1);
+  let opcode = '8203';
+  let params = `${utils.toHex(onoff_value,1)}${utils.toHex(onoff_id,2)}`;
+  console.log(`Parameters hex values: ${params}`);
+  onoffseq = (onoff_seq + 1) % 2;
+  onoff_id++;
+  let destination = config.hex_sensor_add;
+  let segments = build_message(opcode, params, destination);
+  segments.forEach(function(segment) {
+    console.log(`Sending segment: ${segment}`);
+    let octets = utils.hexToU8A(segment)
+    let data = Buffer.from(octects);
+    logAndValidatePdu(octets);
+    meshCharacteristicIn.write(data, true, error => {
+      if (error) {
+        console.log('Error sending to mesh_proxy_data_in');
+      } else {
+        console.log('Messagge sent to mesh successfully');
+      }
+    }); 
+  });
+} 
+
 
 
 //----------------------------------

@@ -1,5 +1,4 @@
 const mqtt = require('mqtt')
-const mesh_bridge = require('./mesh_bridge.js')
 
 let config;
 try {
@@ -10,6 +9,8 @@ try {
 }
 
 status_connected = false;
+onoff_seq = 0;
+on_or_off = 0;
 
 var client  = mqtt.connect(
   config.mqtt_url,
@@ -26,7 +27,7 @@ function send_data(data) {
 
   let encoded = JSON.stringify(data)
   client.publish('v1/devices/me/telemetry', encoded)
-  console.log("Pubishing: " + encoded)
+  console.log("Publishing: " + encoded)
 
   return true;
 }
@@ -48,11 +49,20 @@ client.on('message', function (topic, message) {
 
   if (request.method == "onoff-set") {
     var params = JSON.parse(request.params);
-    var on_or_off = params.onoff;
+    on_or_off = params.onoff;
+    onoff_seq = (onoff_seq + 1) % 2;
 
     console.log("Sending generic onoff message set with value " + on_or_off);
-    mesh_bridge.send_to_proxy(on_or_off);
   }
 });
 
+function check_new_onoff(){
+  let result = {
+    OnOff: on_or_off,
+    OnOff_seq: onoff_seq
+  }
+  return result;
+}
+
 module.exports.send_data = send_data;
+module.exports.check_new_onoff = check_new_onoff;
