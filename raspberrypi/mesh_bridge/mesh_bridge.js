@@ -25,7 +25,7 @@ let send_interval;
 let isConnected = false;
 let sequence_number = 0;
 
-let onoff_seq = 0;
+let onoff_last_value = 0;
 let onoff_id = 0;
 
 let segmentation_buffer = null;
@@ -168,24 +168,25 @@ function send_to_proxy(){
     return;
   }
 
-  let mqtt_onoff = mqtt.check_new_onoff();
-  if(mqtt_onoff.OnOff_seq = onoff_seq) {
+  if(mqtt.check_new_onoff() == onoff_last_value) {
     // no new messages from MQTT has been received
     return;
   }
 
-  onoff_value = utils.toHex(mqtt_onoff.OnOff,1);
+  // configure access payload parameters
+  let onoff_value = utils.toHex(mqtt.check_new_onoff(),1);
   let opcode = '8203';
   let params = `${utils.toHex(onoff_value,1)}${utils.toHex(onoff_id,2)}`;
   console.log(`Parameters hex values: ${params}`);
-  onoffseq = (onoff_seq + 1) % 2;
+  onoff_last_value = mqtt.check_new_onoff();
   onoff_id++;
   let destination = config.hex_sensor_add;
+
   let segments = build_message(opcode, params, destination);
   segments.forEach(function(segment) {
     console.log(`Sending segment: ${segment}`);
     let octets = utils.hexToU8A(segment)
-    let data = Buffer.from(octects);
+    let data = Buffer.from(octets);
     logAndValidatePdu(octets);
     meshCharacteristicIn.write(data, true, error => {
       if (error) {
