@@ -163,16 +163,17 @@ function onServicesAndCharacteristicsDiscovered(error, services, characteristics
     if (isConnected) {
         // TODO retrieve node address, opcode and parameters from MQTT
         let opcode = '8203';
-        let params = `${parseInt(onoff_value,16)}${parseInt(onoff_id,16)}`;
+        let params = `${utils.toHex(onoff_value,1)}${utils.toHex(onoff_id,2)}`;
         console.log(`Parameters hex values: ${params}`);
         onoff_id++;
         onoff_value = (onoff_value + 1) % 2;
-        let destination = '0003';
+        let destination = config.hex_sensor_add;
         let segments = build_message(opcode, params, destination);
         segments.forEach(function(segment) {
           console.log(`Sending segment: ${segment}`);
-          //let octets = utils.hexToU8A(segment);
-          // logAndValidatePdu(octets);
+          let octets = utils.hexToU8A(segment)
+          let data = Buffer.from(octects);
+          logAndValidatePdu(octets);
           meshCharacteristicIn.write(data, true, error => {
             if (error) {
               console.log('Error sending to mesh_proxy_data_in');
@@ -303,7 +304,7 @@ function logAndValidatePdu(octets) {
   hex_pdu_src = hex_ctl_ttl_seq_src.substring(8, 12);
   // validate SRC
   src_int = parseInt(hex_pdu_src,16);
-  if (src_int < 1 || src_int > 127) {
+  if (src_int < 1 || src_int > 32767) {
     console.log(colors.red("SRC is not a valid unicast address. 0x0001-0x7FFF allowed. Ref 3.4.2.2"));
     return;
   }
@@ -578,7 +579,7 @@ function build_message(opcode, params, hex_dst) {
 
   // lower transport PDU content
   let seg_int = parseInt(0, 16);
-  let akf_int = parseInt(0, 16);
+  let akf_int = parseInt(1, 16);
   let aid_int = parseInt(hex_aid, 16);    
   let seg_afk_aid = (seg_int << 7) | (akf_int << 6) | aid_int;
   let lower_transport_pdu = `${utils.intToHex(seg_afk_aid)}${upper_trans_pdu}`;
