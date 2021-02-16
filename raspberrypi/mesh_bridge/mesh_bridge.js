@@ -17,9 +17,11 @@ try {
 const MESH_SERVICE_UUID = '1828';
 const MESH_CHARACTERISTIC_IN_UUID = '2add';
 const MESH_CHARACTERISTIC_OUT_UUID = '2ade';
+let meshCharacteristicIn = "";
+let meshCharacteristicOut = "";
 
 // proxy client is connected once it receives the IV index from a Mesh Beacon messagge
-let send_interval;
+//let send_interval;
 let isConnected = false;
 let sequence_number = 0;
 
@@ -115,7 +117,7 @@ function connectAndSetUp(peripheral) {
   peripheral.on('disconnect', () => {
     console.log('Disconnected. Restarting scan...');
     isConnected = false;
-    clearInterval(send_interval);
+    //clearInterval(send_interval);
     noble.startScanning([MESH_SERVICE_UUID]);}
   );
 }
@@ -124,8 +126,6 @@ function connectAndSetUp(peripheral) {
 // GATT notifications management
 //---------------------------------
 function onServicesAndCharacteristicsDiscovered(error, services, characteristics) {
-  let meshCharacteristicIn = "";
-  let meshCharacteristicOut = "";
   
   console.log('Discovered services and characteristics');
   console.log('Services: ' + services);
@@ -140,7 +140,6 @@ function onServicesAndCharacteristicsDiscovered(error, services, characteristics
     }
   })
   
-
   // data callback receives notifications
   meshCharacteristicOut.on('data', (data, isNotification) => {
     var octets = Uint8Array.from(data);
@@ -156,37 +155,39 @@ function onServicesAndCharacteristicsDiscovered(error, services, characteristics
       console.log('Subscribed for mesh_proxy_data_out notifications');
     }
   });
-
-  // send messages to mesh, write without response
-  // data is a buffer
-  send_interval = setInterval(function() {
-    if (isConnected) {
-        // TODO retrieve node address, opcode and parameters from MQTT
-        let opcode = '8203';
-        let params = `${utils.toHex(onoff_value,1)}${utils.toHex(onoff_id,2)}`;
-        console.log(`Parameters hex values: ${params}`);
-        onoff_id++;
-        onoff_value = (onoff_value + 1) % 2;
-        let destination = config.hex_sensor_add;
-        let segments = build_message(opcode, params, destination);
-        segments.forEach(function(segment) {
-          console.log(`Sending segment: ${segment}`);
-          let octets = utils.hexToU8A(segment)
-          let data = Buffer.from(octects);
-          logAndValidatePdu(octets);
-          meshCharacteristicIn.write(data, true, error => {
-            if (error) {
-              console.log('Error sending to mesh_proxy_data_in');
-            } else {
-              console.log('Messagge sent to mesh successfully');
-            }
-          }); 
-        });
-      } else {
-        console.log('ERROR: IV index has not been configured by Mesh Beacon yet!');
-      }
-  }, 10000);
 }
+
+
+// send messages to mesh, write without response
+//send_interval = setInterval(function() {
+function send_to_proxy(on_or_off){
+  if (isConnected) {
+    onoff_value = utils.toHex(on_or_off,1);
+    let opcode = '8203';
+    let params = `${utils.toHex(onoff_value,1)}${utils.toHex(onoff_id,2)}`;
+    console.log(`Parameters hex values: ${params}`);
+    onoff_id++;
+    //onoff_value = (onoff_value + 1) % 2;
+    let destination = config.hex_sensor_add;
+    let segments = build_message(opcode, params, destination);
+    segments.forEach(function(segment) {
+      console.log(`Sending segment: ${segment}`);
+      let octets = utils.hexToU8A(segment)
+      let data = Buffer.from(octects);
+      logAndValidatePdu(octets);
+      meshCharacteristicIn.write(data, true, error => {
+        if (error) {
+          console.log('Error sending to mesh_proxy_data_in');
+        } else {
+          console.log('Messagge sent to mesh successfully');
+        }
+      }); 
+    });
+    } else {
+      console.log('ERROR: IV index has not been configured by Mesh Beacon yet!');
+    }
+};
+
 
 //----------------------------------
 // Proxy PDU Decryption function
@@ -452,11 +453,9 @@ function logAndValidatePdu(octets) {
   console.log(colors.green("        TransMIC=" + hex_transmic));
   console.log(colors.green("    NetMIC=" + hex_netmic));
 
-  /*
   let decoded = decode_message(hex_pdu_src, hex_params);
   console.log(decoded);
   mqtt.send_data(decoded);
-  */
 }
 
 // append a Uint8Array to the segmentation buffer
@@ -644,3 +643,5 @@ function build_message(opcode, params, hex_dst) {
   
   return segments;
 }
+
+module.exports.send_to_proxy = send_to_proxy;

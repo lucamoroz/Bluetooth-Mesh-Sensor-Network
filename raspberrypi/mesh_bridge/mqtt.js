@@ -1,4 +1,5 @@
-var mqtt = require('mqtt')
+const mqtt = require('mqtt')
+const mesh_bridge = require('./mesh_bridge.js')
 
 let config;
 try {
@@ -49,8 +50,8 @@ client.on('message', function (topic, message) {
     var params = JSON.parse(request.params);
     var on_or_off = params.onoff;
 
-    console.log("Sending generic onoff message set with value " + params.onoff);
-    // TODO send message to mesh
+    console.log("Sending generic onoff message set with value " + on_or_off);
+    mesh_bridge.send_to_proxy(on_or_off);
   }
 });
 
