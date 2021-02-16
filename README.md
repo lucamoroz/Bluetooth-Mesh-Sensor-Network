@@ -3,7 +3,9 @@
 - Thingsboard: Aron Wussler
 - RPi gateway:
   - Bluetooth Mesh packets decryption: Aron Wussler, Luca Tasso
-  - MQTT: Aron Wussler
+  - Bluetooth Mesh generic onoff sending: Luca Tasso
+  - MQTT data out: Aron Wussler
+  - MQTT data in (Thingsboard RPCs): Luca Moroldo 
 - Things:
   - Proxy & Sensor nodes: Luca Moroldo
   - Sensor values reading: Aron Wussler
