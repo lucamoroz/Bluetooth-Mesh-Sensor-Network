@@ -9,7 +9,6 @@ try {
 }
 
 status_connected = false;
-onoff_seq = 0;
 on_or_off = 0;
 
 var client  = mqtt.connect(
@@ -50,18 +49,12 @@ client.on('message', function (topic, message) {
   if (request.method == "onoff-set") {
     var params = JSON.parse(request.params);
     on_or_off = params.onoff;
-    onoff_seq = (onoff_seq + 1) % 2;
-
-    console.log("Sending generic onoff message set with value " + on_or_off);
+    console.log("Generic onoff message set with value " + on_or_off + " ready for sending.");
   }
 });
 
 function check_new_onoff(){
-  let result = {
-    OnOff: on_or_off,
-    OnOff_seq: onoff_seq
-  }
-  return result;
+  return on_or_off;
 }
 
 module.exports.send_data = send_data;
