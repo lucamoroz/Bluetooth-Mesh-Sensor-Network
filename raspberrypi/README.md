@@ -38,9 +38,9 @@
 
         cd node_modules/
         ln -s "@abandonware/bluetooth-hci-socket" bluetooth-hci-socket
-
-9. Set up `config.js` from `config.example.js` the `hex_netkey` and `hex_appkey` according to your
-mesh network values (network key and application key).
+        
+9. Set up `config.js` from `config.example.js` the `hex_netkey`, `hex_appkey` and `hex_sensor_add` according to your
+mesh network values (network key, application key and mesh address of the sensor node).
 
 10. Set to on the proxy state of the proxy node through the nRF Mesh app.
 Verify if the sensors are publishing.

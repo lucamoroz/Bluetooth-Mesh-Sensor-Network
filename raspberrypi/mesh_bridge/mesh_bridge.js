@@ -1,9 +1,10 @@
 const noble = require('noble');
 const colors = require('colors');
-
+const fs = require('fs');
 const crypto = require('./crypto.js');
 const mqtt = require('./mqtt.js');
 const utils = require('./utils.js');
+
 
 let config;
 try {
@@ -14,7 +15,18 @@ try {
 }
 
 const MESH_SERVICE_UUID = '1828';
-const MESH_CHARACTERISTIC_UUID = '2ade';
+const MESH_CHARACTERISTIC_IN_UUID = '2add';
+const MESH_CHARACTERISTIC_OUT_UUID = '2ade';
+let meshCharacteristicIn = "";
+let meshCharacteristicOut = "";
+
+// proxy client is connected once it receives the IV index from a Mesh Beacon messagge
+let send_interval;
+let isConnected = false;
+let sequence_number = 0;
+
+let onoff_last_value = 0;
+let onoff_id = 0;
 
 let segmentation_buffer = null;
 let pdu_segmentation_buffer = [];
@@ -28,10 +40,12 @@ let latest_window = Array(0x400).fill(-1); // Window for 1024 elements
 let hex_iv_index = config.hex_iv_index;
 let hex_netkey = config.hex_netkey;
 let hex_appkey = config.hex_appkey;
+let hex_src = config.hex_src;
 
 hex_encryption_key = ""; // derived from NetKey using k2
 hex_privacy_key = "";    // derived from NetKey using k2
 hex_nid = "";            // derived from NetKey using k2
+hex_aid = "";            // derived from AppKey using k4
 hex_network_id = "";     // derived from NetKey using k3
 
 initialise();
@@ -42,8 +56,21 @@ function initialise() {
   hex_encryption_key = k2_material.encryption_key;
   hex_privacy_key = k2_material.privacy_key;
   hex_nid = k2_material.NID;
+  hex_aid = crypto.k4(hex_appkey);
   console.log('Network ID: ' + hex_nid);
   network_id = crypto.k3(hex_netkey);
+
+  // restore sequence number
+  fs.readFile('seq', 'utf8', function(err, data){ 
+    if (!data) {
+        console.log('Created seq');
+        fs.writeFile('seq', sequence_number.toString(), (err) => { 
+            if (err) throw err; 
+        });
+    } else {
+      sequence_number = parseInt(data);
+    }
+  });
 }
 
 //------------------------------
@@ -78,7 +105,7 @@ function connectAndSetUp(peripheral) {
 
     // specify the services and characteristics to discover
     const serviceUUIDs = [MESH_SERVICE_UUID];
-    const characteristicUUIDs = [MESH_CHARACTERISTIC_UUID];
+    const characteristicUUIDs = [MESH_CHARACTERISTIC_OUT_UUID,MESH_CHARACTERISTIC_IN_UUID];
 
     peripheral.discoverSomeServicesAndCharacteristics(
         serviceUUIDs,
@@ -89,6 +116,8 @@ function connectAndSetUp(peripheral) {
 
   peripheral.on('disconnect', () => {
     console.log('Disconnected. Restarting scan...');
+    isConnected = false;
+    clearInterval(send_interval);
     noble.startScanning([MESH_SERVICE_UUID]);}
   );
 }
@@ -97,27 +126,79 @@ function connectAndSetUp(peripheral) {
 // GATT notifications management
 //---------------------------------
 function onServicesAndCharacteristicsDiscovered(error, services, characteristics) {
-  console.log('Discovered services and characteristics');
-  const meshCharacteristic = characteristics[0];
-  console.log('Services: ' + services);
-  console.log('Characteristics: ' + characteristics);
 
+
+  console.log('Discovered services and characteristics');
+  console.log('Services: ' + services);
+  characteristics.forEach(function(characteristic) {
+    if (characteristic.uuid == MESH_CHARACTERISTIC_IN_UUID) {
+      meshCharacteristicIn = characteristic;
+      console.log('Characteristics mesh_proxy_data_in: ' + meshCharacteristicIn);
+    }
+    if (characteristic.uuid == MESH_CHARACTERISTIC_OUT_UUID) {
+      meshCharacteristicOut = characteristic;
+      console.log('Characteristics mesh_proxy_data_out: ' + meshCharacteristicOut);
+    }
+  })
+  
   // data callback receives notifications
-  meshCharacteristic.on('data', (data, isNotification) => {
+  meshCharacteristicOut.on('data', (data, isNotification) => {
     var octets = Uint8Array.from(data);
     console.log('Received: "' + utils.u8AToHexString(octets).toUpperCase() + '"');
     logAndValidatePdu(octets);
   });
 
   // subscribe to be notified whenever the peripheral update the characteristic
-  meshCharacteristic.subscribe(error => {
+  meshCharacteristicOut.subscribe(error => {
     if (error) {
       console.error('Error subscribing to mesh_proxy_data_out');
     } else {
       console.log('Subscribed for mesh_proxy_data_out notifications');
     }
   });
+
+  send_interval = setInterval(send_to_proxy, 500);
 }
+
+
+// periodically check new messages from MQTT and send them to the mesh network
+function send_to_proxy(){
+  if (!isConnected) {
+    console.log('ERROR: IV index has not been configured by Mesh Beacon yet!');
+    return;
+  }
+
+  if(mqtt.check_new_onoff() == onoff_last_value) {
+    // no new messages from MQTT has been received
+    return;
+  }
+
+  // configure access payload parameters
+  let onoff_value = utils.toHex(mqtt.check_new_onoff(),1);
+  let opcode = '8203';
+  let params = `${utils.toHex(onoff_value,1)}${utils.toHex(onoff_id,2)}`;
+  console.log(`Parameters hex values: ${params}`);
+  onoff_last_value = mqtt.check_new_onoff();
+  onoff_id++;
+  let destination = config.hex_sensor_add;
+
+  let segments = build_message(opcode, params, destination);
+  segments.forEach(function(segment) {
+    console.log(`Sending segment: ${segment}`);
+    let octets = utils.hexToU8A(segment)
+    let data = Buffer.from(octets);
+    logAndValidatePdu(octets);
+    meshCharacteristicIn.write(data, true, error => {
+      if (error) {
+        console.log('Error sending to mesh_proxy_data_in');
+      } else {
+        console.log('Messagge sent to mesh successfully');
+      }
+    }); 
+  });
+} 
+
+
 
 //----------------------------------
 // Proxy PDU Decryption function
@@ -142,7 +223,7 @@ function logAndValidatePdu(octets) {
     console.log(colors.red("SAR contains invalid value. 0-3 allowed. Ref Table 6.2"));
     return;
   } else if (sar == 0) {
-    console.log("Complete message: " + utils)
+    console.log("Complete message: " + utils.u8AToHexString(octets));
   } else if (sar == 1) {
     segmentation_buffer = null;
     segmentation_buffer = Buffer.from(octets);
@@ -234,9 +315,8 @@ function logAndValidatePdu(octets) {
 
   hex_pdu_src = hex_ctl_ttl_seq_src.substring(8, 12);
   // validate SRC
-  src_bytes = utils.hexToBytes(hex_pdu_src);
-  src_value = src_bytes[0] + (src_bytes[1] << 8);
-  if (src_value < 0x0001 || src_value > 0x7FFF) {
+  src_int = parseInt(hex_pdu_src,16);
+  if (src_int < 1 || src_int > 32767) {
     console.log(colors.red("SRC is not a valid unicast address. 0x0001-0x7FFF allowed. Ref 3.4.2.2"));
     return;
   }
@@ -415,12 +495,12 @@ function extract_mesh_beacon(octets) {
   // TODO update IV index
 
   // check NID
-  // TODO verify the correctness of the statically configured network key
-  console.log("Network ID from beacon: " + utils.u8AToHexString(octets.subarray(2,10)));
+  // console.log("Network ID from beacon: " + utils.u8AToHexString(octets.subarray(2,10)));
 
   // retrieve IV index
   hex_iv_index = utils.u8AToHexString(octets.subarray(10,14));
   console.log("IV Index: " + hex_iv_index);
+  isConnected = true;
   return;
 }
 
@@ -485,3 +565,94 @@ function decode_gas(name, message) {
 
   return obj;
 }
+
+function build_message(opcode, params, hex_dst) {
+  console.log("Assembling new mesh message...");
+
+  // access PDU content
+  let hex_access_payload = `${opcode}${params}`;
+  console.log(`Access Payload: ${hex_access_payload}`);
+
+  // upper transport PDU content
+  // !! nonce works only for unsegmented access PDUs !!
+  let hex_pdu_seq = utils.toHex(sequence_number, 3);
+  hex_app_nonce = "0100" + hex_pdu_seq + hex_src + hex_dst + hex_iv_index;
+  let utp_enc_result = crypto.meshAuthEncAccessPayload(hex_appkey, hex_app_nonce, hex_access_payload);
+  let upper_trans_pdu = `${utp_enc_result.EncAccessPayload}${utp_enc_result.TransMIC}`;
+  console.log(`Upper Transport PDU: ${upper_trans_pdu}`);
+
+  // check if upper transport PDU is too long and must be segmented
+  if (upper_trans_pdu.length > 30) {
+      console.log("WARNING: Access payload is too long. Lower Transport Layer segmentation required.")
+      return;
+  }
+
+  // lower transport PDU content
+  let seg_int = parseInt(0, 16);
+  let akf_int = parseInt(1, 16);
+  let aid_int = parseInt(hex_aid, 16);    
+  let seg_afk_aid = (seg_int << 7) | (akf_int << 6) | aid_int;
+  let lower_transport_pdu = `${utils.intToHex(seg_afk_aid)}${upper_trans_pdu}`;
+  console.log(`Lower Transport PDU: ${lower_transport_pdu}`);
+
+  // encrypt network PDU
+  let ctl_int = parseInt(0, 16);
+  let ttl_int = parseInt(2, 16);
+  let ctl_ttl = (ctl_int | ttl_int);
+  let npdu2 = utils.intToHex(ctl_ttl);
+  let norm_enc_key = utils.normaliseHex(hex_encryption_key);
+  let hex_net_nonce = "00" + npdu2 + hex_pdu_seq + hex_src + "0000" + hex_iv_index;
+  let np_enc_result = crypto.meshAuthEncNetwork(norm_enc_key, hex_net_nonce, hex_dst, lower_transport_pdu);
+  let enc_dst = np_enc_result.EncDST;
+  let enc_transport_pdu = np_enc_result.EncTransportPDU;
+  let netmic = np_enc_result.NetMIC;
+  console.log(`Encrypted network payload: ${enc_dst}${enc_transport_pdu}${netmic}`)
+  
+  // obfuscate network header
+  let obfuscated = crypto.obfuscate(enc_dst, enc_transport_pdu,
+      netmic, 0, 2, hex_pdu_seq, hex_src, hex_iv_index, hex_privacy_key);
+  let obfuscated_ctl_ttl_seq_src = obfuscated.obfuscated_ctl_ttl_seq_src;
+  console.log(`Obfuscated network header: ${obfuscated_ctl_ttl_seq_src}`)
+
+  // assemble complete network PDU
+  let ivi = utils.leastSignificantBit(parseInt(utils.normaliseHex(hex_iv_index), 16));
+  let ivi_int = parseInt(ivi, 16);
+  let nid_int = parseInt(hex_nid, 16);
+  let npdu1 = utils.intToHex((ivi_int << 7) | nid_int);
+  let network_pdu = npdu1 + obfuscated_ctl_ttl_seq_src + enc_dst + enc_transport_pdu + netmic;
+  console.log(`Network PDU: ${network_pdu}`);
+
+  // proxy PDU header
+  let proxy_pdu = "";
+  let segments = [];
+
+  console.log(network_pdu.length);
+  if (network_pdu.length > 38) {
+      console.log(`Proxy PDU is too long. Segmenting...`);
+      segments[0] = proxy_pdu + utils.toHex(64,1) + network_pdu.substring(0,38);
+      console.log(`First Proxy PDU segment: ${segments[0]}`);
+      segmented_npdu = network_pdu.substring(38);
+      let i = 1;
+      while (segmented_npdu.length > 38) {
+          segments[i] = proxy_pdu + utils.toHex(80,1) + segmented_npdu.substring(0,38);
+          segmented_npdu = segmented_npdu.substring(38);
+          i++;
+          console.log(`Intermediate Proxy PDU segment: ${segments[i]}`);
+      };
+      segments[i] = proxy_pdu + utils.toHex(192,1) + segmented_npdu;
+      console.log(`Last Proxy PDU segment: ${segments[i]}`);
+  } else {
+      segments[0] = proxy_pdu + utils.toHex(0,1) + network_pdu;
+      console.log(`Proxy PDU: ${segments[0]}`);
+  }
+
+  // update sequence number
+  sequence_number++;
+  fs.writeFile('seq', sequence_number.toString(), (err) => { 
+    if (err) throw err; 
+  });
+  
+  return segments;
+}
+
+module.exports.send_to_proxy = send_to_proxy;
