@@ -169,7 +169,7 @@ function send_to_proxy(){
     return;
   }
 
-  if(mqtt.check_new_onoff == onoff_last_value) {
+  if(mqtt.check_new_onoff() == onoff_last_value) {
     // no new messages from MQTT has been received
     return;
   }
