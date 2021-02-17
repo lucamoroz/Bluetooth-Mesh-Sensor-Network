@@ -464,8 +464,11 @@ function logAndValidatePdu(octets) {
   console.log(colors.green("    NetMIC=" + hex_netmic));
   */
 
-  console.log(colors.blue.bold(`New message received from node ${hex_pdu_src}:`));
   let decoded = decode_message(hex_pdu_src, hex_params);
+  if (decoded.err == "unknown message"){
+    return;
+  }
+  console.log(colors.blue.bold(`New message received from node ${hex_pdu_src}:`));
   console.log(decoded);
   mqtt.send_data(decoded);
 }
@@ -525,7 +528,8 @@ function decode_message(sender, message) {
 
     default:
       // console.log("Error: unknown message");
-      return {}
+      return obj = {err: "unknown message"}
+      //return {}
   }
 }
 
