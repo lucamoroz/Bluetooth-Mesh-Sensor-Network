@@ -331,7 +331,7 @@ function logAndValidatePdu(octets) {
   result = crypto.decryptAndVerify(hex_encryption_key, hex_enc_network_data, hex_nonce, 4);
   // console.log("result=" + JSON.stringify(result));
   if (result.status == -1) {
-    console.log("ERROR: "+result.error.message);
+    console.log(colors.red("ERROR: " + result.error.message));
     return;
   }
 
