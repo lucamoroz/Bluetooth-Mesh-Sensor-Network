@@ -476,7 +476,7 @@ function logAndValidatePdu(octets) {
 // append a Uint8Array to the segmentation buffer
 function concatenate(octets) {
   if (segmentation_buffer == null){
-    console.log("ERROR: proxy PDU concatenation error");
+    console.log(colors.red("ERROR: proxy PDU concatenation error"));
     return
   }
   var continuation = Buffer.from(octets);
