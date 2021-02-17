@@ -48,5 +48,6 @@ The dashboard will be ThingsBoard, running as a docker service.
 
 The dashboard will allow the users to:
 - Visualize the sensors data
+- Send an alert to turn on or off the sensors LEDs (to simulate a ventilation system activation)
 
 The communication with ThingsBoard will be MQTT-based, that is asynchronous.
