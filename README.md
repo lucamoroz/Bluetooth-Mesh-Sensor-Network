@@ -18,6 +18,11 @@ Group: Aron Wussler, Luca Moroldo, Luca Tasso
 # Demo
 The ThingsBoard dashboards can be seen on https://iot.wussler.it/ logging in with the credentials `tenant@iot.wussler.it`/`X6Rqcfpmch0T6L1R`
 
+This has been set up using nginx's reverse-proxy functionality with Let's Encrypt TLS certificates.
+The same certificates have been converted to PKCS12 to use to secure MQTT over TLS directly on port 8883.
+
+In the folder ThingsBoard the exported configuration is available.
+
 # Requirements
 Our plan is to build a system capable of monitoring temperature and air quality of one or more rooms and show this dashboard.
 Moreover the sensors will notify any critical air condition through their LED.
