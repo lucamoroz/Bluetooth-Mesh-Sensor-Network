@@ -27,7 +27,7 @@
    - `hex_appkey`, mesh application key;
    - `mqtt_url`, Thingsboard MQTT instance address;
    - `mqtt_token`, authentication token for MQTT;
-   - `proxy_ids`, proxy node Bluetooth identifier (it appears while scanning for nodes with nRF Mesh app;
+   - `proxy_ids`, proxy node Bluetooth identifier (it appears while scanning for nodes with nRF Mesh app);
    - `address_map`, mapping of mesh sensor addresses to human readable names
 
 10. Make sure the nodes are not connected to the nRF app before continuing.
