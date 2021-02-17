@@ -11,7 +11,7 @@
   - Sensor values reading: Aron Wussler
 
 # Description
-TUWien - IoT project.
+TUWien - IoT project WS 2020/2021.
 
 Group: Aron Wussler, Luca Moroldo, Luca Tasso
 
