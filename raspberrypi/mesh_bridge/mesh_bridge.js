@@ -182,7 +182,7 @@ function send_to_proxy(){
   onoff_last_value = mqtt.check_new_onoff();
   onoff_id++;
   
-  console.log(colors.red.bold("Sending LED alert to mesh."));
+  console.log(colors.red.bold(`Sending on/off alert to mesh: ${(onoff_value == 1) ? "ON" : "OFF"}`));
   let segments = build_message(opcode, params, destination);
   segments.forEach(function(segment) {
     // console.log(`Sending segment: ${segment}`);
