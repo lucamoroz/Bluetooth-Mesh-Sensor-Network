@@ -26,7 +26,7 @@ function send_data(data) {
 
   let encoded = JSON.stringify(data)
   client.publish('v1/devices/me/telemetry', encoded)
-  console.log("Publishing: " + encoded)
+  // console.log("Publishing: " + encoded)
 
   return true;
 }
@@ -40,16 +40,16 @@ client.on('connect', function () {
 })
 
 client.on('message', function (topic, message) {
-  console.log('Received RPC message');
-  console.log('request.topic: ' + topic);
-  console.log('request.body: ' + message.toString());
+  // console.log('Received RPC message');
+  // console.log('request.topic: ' + topic);
+  // console.log('request.body: ' + message.toString());
   
   var request = JSON.parse(message.toString());
 
   if (request.method == "onoff-set") {
     var params = JSON.parse(request.params);
     on_or_off = params.onoff;
-    console.log("Generic onoff message set with value " + on_or_off + " ready for sending.");
+    // console.log("Generic onoff message set with value " + on_or_off + " ready for sending.");
   }
 });
 

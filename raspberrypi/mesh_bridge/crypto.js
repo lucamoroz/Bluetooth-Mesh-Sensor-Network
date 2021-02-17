@@ -18,7 +18,7 @@ function getAesCmac(hex_key, hex_message) {
 }
 
 function init() {
-	console.log("initialising crypto variables");
+	console.log("Initialising crypto variables...");
 	ZERO = '00000000000000000000000000000000';
 	k2_salt = s1("736d6b32"); // "smk2"
 	k3_salt = s1("736d6b33"); // "smk3"
@@ -197,7 +197,7 @@ function obfuscate(enc_dst, enc_transport_pdu, netmic, ctl, ttl, seq, src, iv_in
 }
 
 function deobfuscate(obfuscated_data, iv_index, netkey, privacy_random, privacy_key) {
-	console.log("deobfuscate");
+	// console.log("deobfuscate");
 
 	var result = {
 		privacy_key: '',
